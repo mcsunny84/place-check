@@ -141,12 +141,12 @@ test('B5: totalImages value → 수치 판정 (3 → fail) / missing → unknown
   assert.equal(st({ totalImages: V('23') }, 'B5'), 'unknown');
 });
 
-test('B6: 최신 ≤30 → 완전성 불문 / 31+·empty → complete=true일 때만 / 그 외 unknown', () => {
+test('B6: 첫 페이지 최댓값으로 판정(최신순 실측) / 빈 목록은 complete=true일 때만 fail', () => {
   const f = (createdAt) => ({ createdAt, category: '알림', desc: '' });
   assert.equal(raw({ feeds: V([f('2026-08-15')]), feedsComplete: V(false) }, 'B6'), '2026-08-15');
   assert.equal(st({ feeds: V([f('2026-08-15')]), feedsComplete: V(false) }, 'B6'), 'pass');
-  assert.equal(st({ feeds: V([f('2026-08-14')]), feedsComplete: V(false) }, 'B6'), 'unknown');
-  assert.equal(st({ feeds: V([f('2026-08-14')]), feedsComplete: M }, 'B6'), 'unknown');
+  assert.equal(st({ feeds: V([f('2026-08-14')]), feedsComplete: V(false) }, 'B6'), 'partial');
+  assert.equal(st({ feeds: V([f('2026-08-14')]), feedsComplete: M }, 'B6'), 'partial');
   assert.equal(st({ feeds: V([f('2026-08-14')]), feedsComplete: V(true) }, 'B6'), 'partial');
   assert.equal(st({ feeds: V([f('2026-06-15')]), feedsComplete: V(true) }, 'B6'), 'fail');
   assert.equal(raw({ feeds: V([]), feedsComplete: V(true) }, 'B6'), 'none');

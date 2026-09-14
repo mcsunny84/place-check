@@ -32,7 +32,7 @@ const COOLDOWN_MS = 30 * 60 * 1000;
 const IP_LIMIT = 3; // 새 수집 작업 / 60초
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const TABS = ['review/visitor', 'information', 'feed', 'photo']; // 홈 다음 우선순위(06 §3 + 리뷰 탭 추가)
-const BUDGET = 5; // 홈 + 탭 4 (단축 URL 해석 시 photo 생략)
+const BUDGET = 6; // 홈 + 탭 4 + 재시도 여유 1 (단축 URL 해석 시 photo 생략)
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
@@ -128,8 +128,10 @@ async function collect(job) {
   for (const tab of TABS) {
     if (budget <= 0) break;
     budget -= 1;
+    let r;
     try {
-      const r = await fetchText(`${base}/${tab}`);
+      try { r = await fetchText(`${base}/${tab}`); }
+      catch (e) { if (e instanceof Blocked || budget <= 0) throw e; budget -= 1; r = await fetchText(`${base}/${tab}`); } // 비차단 실패(타임아웃 등) 1회 재시도
       if (r.status !== 200) continue;
       if (tab === 'review/visitor') facts = P.parseReviewVisitor(r.text, facts, { now: new Date(state.now()) });
       if (tab === 'information') facts = P.parseInformation(r.text, facts);

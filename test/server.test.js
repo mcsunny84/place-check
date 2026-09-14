@@ -116,11 +116,11 @@ test('URL 오류 → no_url / unsupported', async () => {
   assert.equal((await req('https://m.map.naver.com/search2/site.naver?code=123')).body.reason, 'unsupported');
 });
 
-test('단축 URL: 해석 1회 + 홈 + 탭 3개 = 5회', async () => {
+test('단축 URL: 해석 1회 + 홈 + 탭 4개 = 6회 (예산 6)', async () => {
   resetState(); const calls = fakeFetch((url) => url.includes('naver.me') ? { status: 200, url: URL1, text: '' } : okPlan(url));
   const r = await req('https://naver.me/AbCd1234');
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 5);
-  assert.ok(!calls.some((u) => /\/photo$/.test(u)), 'photo 탭 생략');
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 6);
+  assert.ok(calls.some((u) => /\/photo$/.test(u)), 'photo 탭 포함');
 });
 
 test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지나면 새로 fetch', async () => {
@@ -146,4 +146,12 @@ test('LLM 인사이트는 매장당 1회 호출 후 캐시 재사용', async () 
   const r2 = await req(URL1, '7.7.7.7');
   assert.equal(r2.body.insight.source, 'llm'); assert.equal(r2.body.insight.llm.strengths[0], 's1'); assert.equal(calls, 1, '캐시 hit 시 재호출 없음');
   srv.state.llm = null;
+});
+
+test('추가 탭 일시 실패 → 1회 재시도 후 성공', async () => {
+  resetState(); let photoTries = 0;
+  const calls = fakeFetch((url) => { if (/\/photo$/.test(url)) { photoTries += 1; if (photoTries === 1) return new Error('timeout'); } return okPlan(url); });
+  const r = await req(URL1);
+  assert.equal(r.body.mode, 'auto'); assert.equal(photoTries, 2); assert.equal(calls.length, 6);
+  assert.equal(srv.readCache('2086785604').totalImages.status, 'value');
 });

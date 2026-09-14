@@ -139,7 +139,7 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const today = () => { const d = new Date(); const k = new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); return k.toISOString().slice(0,10); };
   const kst = (iso) => { const t = Date.parse(iso); if (!t) return ''; return new Date(t + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ') + ' KST'; };
-  const STATE_KO = { pass:'좋아요', partial:'조금 더', fail:'비었어요', unknown:'모름', na:'해당 없음' };
+  const STATE_KO = { pass:'좋아요', partial:'조금 더', fail:'비었어요', unknown:'확인 안 됨', na:'해당 없음' };
   const GROUP_KO = { A:'기본정보', B:'콘텐츠', C:'기능', D:'평판 운영' };
 
   // ---------- 탭 ----------
@@ -197,14 +197,16 @@
   // ---------- 결과 렌더 ----------
   function renderScore(result, todos, auto) {
     const r = result;
+    const knownW = Object.values(r.groups).reduce((a, x) => a + x.known, 0);
+    const unkW = Object.values(r.groups).reduce((a, x) => a + (x.applicable - x.known), 0);
     const head = r.display === 'insufficient'
       ? `<div class="score">—</div><p class="muted">답변이 부족해요. 몇 가지만 더 답하면 점수가 나와요.</p>`
       : r.display === 'grade'
-        ? `<div class="score">${r.grade}</div><p class="muted">등급만 표시 (읽은 항목 ${Math.round(r.coverage*100)}%)</p>`
-        : `<div><span class="score">${r.score}</span><span class="grade">${r.grade}</span></div><p class="muted">100점 만점 · 읽은 항목 ${Math.round(r.coverage*100)}%</p>`;
+        ? `<div class="score">${r.grade}</div><p class="muted">확인된 항목이 ${Math.round(r.coverage*100)}%뿐이라 등급만 표시해요. 아래 질문에 답하면 점수가 나와요.</p>`
+        : `<div><span class="score">${r.score}</span><span class="grade">${r.grade}</span></div><p class="muted">확인된 항목 ${knownW}점 기준 (100점 환산) · 확인 안 된 ${unkW}점은 계산에서 뺐어요</p>`;
     let bars = '';
-    for (const g of ['A','B','C','D']) { const x = r.groups[g]; const pct = x.applicable ? Math.round(100 * x.earned / x.applicable) : 0;
-      bars += `<div><span style="font-size:13px">${GROUP_KO[g]} ${x.earned}/${x.applicable}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`; }
+    for (const g of ['A','B','C','D']) { const x = r.groups[g]; const unk = x.applicable - x.known; const pct = x.known ? Math.round(100 * x.earned / x.known) : 0;
+      bars += `<div><span style="font-size:13px">${GROUP_KO[g]} ${x.earned}/${x.known}${unk ? ` <span class="muted">(확인 안 됨 ${unk}점 제외)</span>` : ''}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`; }
     let todoHtml = todos.length ? todos.map((id, i) => `<div class="todo"><b>${i+1}. ${esc(labelOf(id))}</b><p style="margin:4px 0 0;font-size:14px">${esc(COPY[id].how)}</p></div>`).join('') : '<p class="muted">채울 항목이 없어요. 훌륭해요.</p>';
     let items = '';
     for (const g of ['A','B','C','D']) { items += `<div class="grp">${GROUP_KO[g]}</div><div class="card">`;
@@ -214,7 +216,9 @@
         if (it.state !== 'pass' && it.state !== 'na') items += `<p>${esc(COPY[it.id].why)}</p><p class="muted">${esc(COPY[it.id].how)}</p>`;
         items += '</div>';
       } items += '</div>'; }
-    return `<div class="card">${head}${bars}</div><div class="grp">이번 주 할 일</div>${todoHtml}${items}`;
+    const unk = r.items.filter((i) => i.state === 'unknown').length;
+    const unkNote = unk ? `<p class="notice">"확인 안 됨" ${unk}개는 네이버 페이지에서 자동으로 읽지 못한 항목이에요. 감점 없이 계산에서 뺐고, 아래 질문에 답하면 점수에 반영돼요.</p>` : '';
+    return `<div class="card">${head}${bars}${unkNote}</div><div class="grp">이번 주 할 일</div>${todoHtml}${items}`;
   }
   const labelOf = (id) => (S.ITEMS.find((x) => x.id === id) || {}).label || id;
 
