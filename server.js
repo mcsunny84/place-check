@@ -318,7 +318,8 @@ async function buildResponse(facts, asOf, queuedPosition) {
   }
   if (!(cachedKw && cachedDesc && cachedIns && facts.keywords_volume !== undefined)) {
     const pid = v(facts.placeId);
-    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM, keywords_volume: volumes === undefined ? null : volumes, description_llm: descLLM, insight_llm: insight ? (insight.llm || null) : null }); } catch { /* 캐시 실패 무시 */ } }
+    // null(키 없음·실패)은 캐시하지 않는다(undefined → JSON에서 빠짐) — 키를 나중에 넣으면 다음 요청에서 다시 시도
+    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM || undefined, keywords_volume: volumes || undefined, description_llm: descLLM || undefined, insight_llm: (insight && insight.llm) || undefined }); } catch { /* 캐시 실패 무시 */ } }
   }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
