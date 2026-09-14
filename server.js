@@ -375,7 +375,7 @@ function serveStatic(req, res) {
     if (err) return send(res, 404, 'not found', 'text/plain');
     const ext = path.extname(file);
     const type = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'text/javascript; charset=utf-8' : ext === '.css' ? 'text/css' : 'application/octet-stream';
-    res.writeHead(200, { 'content-type': type });
+    res.writeHead(200, { 'content-type': type, 'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=300' }); // 화면 갱신이 폰에 바로 반영되도록
     res.end(buf);
   });
 }
