@@ -32,9 +32,9 @@ const COOLDOWN_MS = 30 * 60 * 1000;
 const IP_LIMIT = 3; // 새 수집 작업 / 60초
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const TABS = ['review/visitor', 'feed']; // 홈에 상세설명·사진 수·찾아오는 길까지 있어(07번) 정보·사진 탭 불필요
-const BUDGET = 9; // 홈 + 탭 2 + 리뷰 GraphQL 최대 4페이지 + 재시도·단축 URL 여유 2
+const BUDGET = 11; // 홈 + 탭 2 + 리뷰 GraphQL 최대 6페이지 + 재시도·단축 URL 여유 2
 const REVIEW_DAYS = 180;       // 리뷰 수집 창(최근 6개월)
-const REVIEW_PAGES_MAX = 4;    // 50건 × 4 = 최대 200건
+const REVIEW_PAGES_MAX = 6;    // 50건 × 6 = 최대 300건 (그 이상은 창을 앞당겨 표시)
 const GQL_URL = 'https://pcmap-api.place.naver.com/graphql';
 const GQL_REVIEWS = 'query getVisitorReviews($input: VisitorReviewsInput) { visitorReviews(input: $input) { total items { id rating body visited created cursor reply { body created } votedKeywords { name } visitCategories { keywords { name } } } } }';
 
@@ -149,7 +149,10 @@ async function collectReviews(job, placeId, type, facts, budgetRef) {
   const ssr = facts.reviews && facts.reviews.status === 'value' ? facts.reviews.value : [];
   const merged = P.dedupeReviews([...all, ...ssr]).filter((r) => { const d = r.visited || r.created; return !d || d >= cutoff; });
   merged.sort((a, b) => String(b.visited || b.created || '').localeCompare(String(a.visited || a.created || '')));
-  return { ...facts, reviews: { status: 'value', value: merged }, reviewWindow: { status: 'value', value: { days: REVIEW_DAYS, from: cutoff, fetched: all.length, complete: all.length < REVIEW_PAGES_MAX * 50 } } };
+  const complete = all.length < REVIEW_PAGES_MAX * 50;
+  const oldest = merged.map((r) => r.visited || r.created).filter(Boolean).sort()[0] || cutoff;
+  // 상한에 걸리면 실제 수집된 가장 오래된 날짜를 창 시작으로 표시(6개월을 다 못 채웠다는 사실을 숨기지 않음)
+  return { ...facts, reviews: { status: 'value', value: merged }, reviewWindow: { status: 'value', value: { days: REVIEW_DAYS, from: complete ? cutoff : (oldest > cutoff ? oldest : cutoff), fetched: all.length, complete } } };
 }
 
 // ---------- 작업 실행 ----------

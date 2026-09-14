@@ -84,7 +84,7 @@
   <section id="tab-auto">
     <p class="kicker">네이버 플레이스 채움 진단</p>
     <h1 class="hero">우리 가게 플레이스, <em>얼마나 채워져</em> 있을까?</h1>
-    <p class="sub">주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지. 순위를 예측하는 게 아니라 "채움 정도"를 봅니다.</p>
+    <p class="sub">주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지.<br>순위를 예측하는 게 아니라 "채움 정도"를 봅니다.</p>
 
     <div class="card" style="margin-top: 32px;">
       <label class="f" for="url">플레이스 주소</label>
@@ -268,7 +268,7 @@
     if (!ins) return '';
     const li = (arr, f) => arr.length ? '<ol class="list">' + arr.map((x) => `<li>${f(x)}</li>`).join('') + '</ol>' : '<p class="muted">자료가 부족해요.</p>';
     const st = ins.stats || {};
-    let html = `<section class="res">${secHead('04', '리뷰로 본 우리 가게', 'Reviews')}<div class="card"><p class="muted">방문자 리뷰 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점 · 최근 ${st.recent ?? 0}건 중 답글 ${st.recentWithReply ?? 0}건</p>`;
+    let html = `<section class="res">${secHead('04', '리뷰로 본 우리 가게', 'Reviews')}<div class="card"><p class="muted">방문자 리뷰 전체 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점${st.windowFrom ? ` · <b>${esc(st.windowFrom.slice(5).replace('-', '/'))} 이후 ${st.recent}건</b> 읽음` : ` · 최근 ${st.recent ?? 0}건 읽음`} · 답글률 ${st.recent ? Math.round(100 * (st.recentWithReply || 0) / st.recent) : 0}%${st.recentAvgRating ? ` · 최근 평균 ${st.recentAvgRating}점` : ''}</p>${st.byMonth && st.byMonth.length ? `<p class="muted">월별 리뷰: ${st.byMonth.map((m) => esc(m.month.slice(2).replace('-', '/')) + ' ' + m.count + '건').join(' · ')}</p>` : ''}`;
     if (ins.llm) {
       html += `<h4 class="sub-h">손님이 꼽은 장점</h4>${li(ins.llm.strengths, esc)}<h4 class="sub-h">보완하면 좋을 점</h4>${li(ins.llm.improvements, esc)}<p class="muted" style="margin-top:8px">최근 리뷰 본문을 AI가 읽고 정리한 내용이에요. 아래 숫자는 네이버 리뷰 통계 그대로.</p>`;
     }
