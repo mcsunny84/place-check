@@ -223,6 +223,19 @@
     const rec = kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}</span></div>`).join('') || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
     return `<div class="card"><h3 style="margin:0 0 6px">현재 대표키워드</h3>${diag}</div><div class="card"><h3 style="margin:0 0 6px">추천 키워드 (최대 10)</h3>${rec}<p class="notice">검색량은 <b>네이버 검색광고 &gt; 키워드 도구</b>에서 확인하세요. 월 검색수 100 미만은 후순위.</p><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p></div>`;
   }
+  function renderInsight(ins) {
+    if (!ins) return '';
+    const li = (arr, f) => arr.length ? '<ol style="margin:4px 0 0 18px;padding:0">' + arr.map((x) => `<li style="margin:4px 0">${f(x)}</li>`).join('') + '</ol>' : '<p class="muted">자료가 부족해요.</p>';
+    const st = ins.stats || {};
+    let html = `<div class="card"><h3 style="margin:0 0 4px">리뷰로 본 우리 가게</h3><p class="muted" style="margin:0 0 8px">방문자 리뷰 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점 · 최근 ${st.recent ?? 0}건 중 답글 ${st.recentWithReply ?? 0}건</p>`;
+    if (ins.llm) {
+      html += `<h4 style="margin:10px 0 2px">손님이 꼽은 장점</h4>${li(ins.llm.strengths, esc)}<h4 style="margin:12px 0 2px">보완하면 좋을 점</h4>${li(ins.llm.improvements, esc)}<p class="muted" style="margin-top:8px">최근 리뷰 본문을 AI가 읽고 정리한 내용이에요. 아래 숫자는 네이버 리뷰 통계 그대로.</p>`;
+    }
+    html += `<h4 style="margin:12px 0 2px">${ins.llm ? '투표 키워드 상위 5' : '손님이 꼽은 장점 (투표 키워드 상위 5)'}</h4>${li(ins.strengths, (s) => `${esc(s.text)} <span class="muted">${s.count}표${s.share != null ? ' · ' + s.share + '%' : ''}</span>`)}`;
+    if (!ins.llm) html += `<h4 style="margin:12px 0 2px">보완하면 좋을 점</h4>${li(ins.improvements, (i) => esc(i.text))}`;
+    if (st.themes && st.themes.length) html += `<p class="muted" style="margin-top:10px">리뷰에서 많이 언급된 주제: ${st.themes.map((t) => esc(t.name) + ' ' + t.count).join(' · ')}</p>`;
+    return html + '</div>';
+  }
   function renderDraft(text) {
     return `<div class="card"><h3 style="margin:0 0 6px">Q&amp;A식 상세설명 초안</h3><pre class="draft" id="draft-text">${esc(text)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
   }
@@ -252,6 +265,7 @@
     if (d.supplement && d.supplement.length) {
       html += `<div class="grp">자동으로 못 읽은 것 — 답하면 더 정확해져요</div><form id="sup-form"><div class="card">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}<button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`;
     }
+    html += renderInsight(d.insight);
     html += renderKeywords(d.keywords);
     html += renderDraft(d.draft);
     $('#auto-result').innerHTML = html;
@@ -266,7 +280,7 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">보충 답변 반영</span></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderKeywords(d.keywords) + renderDraft(d.draft);
+      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">보충 답변 반영</span></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderInsight(d.insight) + renderKeywords(d.keywords) + renderDraft(d.draft);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
     }, { once: true });

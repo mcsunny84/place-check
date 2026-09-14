@@ -9,6 +9,7 @@ const { factsToAnswers } = require('./lib/facts-to-answers');
 const S = require('./lib/place-scoring');
 const K = require('./lib/keyword');
 const D = require('./lib/draft');
+const R = require('./lib/review-insight');
 
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
@@ -22,7 +23,8 @@ const QUEUE_MAX = 200;
 const COOLDOWN_MS = 30 * 60 * 1000;
 const IP_LIMIT = 3; // 새 수집 작업 / 60초
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const TABS = ['information', 'feed', 'photo']; // 홈 다음 우선순위(06 §3)
+const TABS = ['review/visitor', 'information', 'feed', 'photo']; // 홈 다음 우선순위(06 §3 + 리뷰 탭 추가)
+const BUDGET = 5; // 홈 + 탭 4 (단축 URL 해석 시 photo 생략)
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
@@ -36,6 +38,7 @@ const state = {
   lastFetchStart: 0,
   ipLog: new Map(),      // ip -> [epoch ms]
   fetchImpl: globalThis.fetch,
+  llm: undefined,          // review-insight LLM 호출 함수(테스트 주입); undefined = ANTHROPIC_API_KEY 있으면 실제 호출
   now: () => Date.now(),
 };
 
@@ -96,7 +99,7 @@ async function fetchText(url) {
 
 // ---------- 작업 실행 ----------
 async function collect(job) {
-  let budget = 4;
+  let budget = BUDGET;
   let placeId = job.placeId;
   let type = job.type || 'place';
   if (job.shortUrl) {
@@ -120,6 +123,7 @@ async function collect(job) {
     try {
       const r = await fetchText(`${base}/${tab}`);
       if (r.status !== 200) continue;
+      if (tab === 'review/visitor') facts = P.parseReviewVisitor(r.text, facts, { now: new Date(state.now()) });
       if (tab === 'information') facts = P.parseInformation(r.text, facts);
       if (tab === 'feed') facts = P.parseFeed(r.text, facts);
       if (tab === 'photo') facts = P.parsePhoto(r.text, facts);
@@ -179,7 +183,7 @@ function enqueue(parsed) {
 }
 
 // ---------- 결과 조립 ----------
-function buildResponse(facts, asOf, queuedPosition) {
+async function buildResponse(facts, asOf, queuedPosition) {
   const { answers, auto } = factsToAnswers(facts, { asOf });
   const result = S.computeScore(answers, { asOf });
   const v = (o) => (o && o.status === 'value' ? o.value : null);
@@ -213,8 +217,9 @@ function buildResponse(facts, asOf, queuedPosition) {
     takeout: conv.includes('포장'), delivery: conv.includes('배달'), group: conv.includes('단체 이용 가능'),
     accessor: v(facts.accessor) || undefined,
   });
+  const insight = await R.buildInsight(facts, { asOf, llm: state.llm });
   return {
-    mode: 'auto', as_of: asOf, queued_position: queuedPosition,
+    mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
     answers, auto, result, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
   };
@@ -249,7 +254,7 @@ async function handleCheck(req, res, body) {
   // 캐시 hit — 쿨다운·IP 한도 무관
   if (!parsed.needsResolve) {
     const cached = readCache(parsed.placeId);
-    if (cached) return send(res, 200, buildResponse(cached, asOf, 0));
+    if (cached) return send(res, 200, await buildResponse(cached, asOf, 0));
   }
   if (inCooldown()) {
     // 만료 여부는 inCooldown이 판단. 여기 왔다면 아직 쿨다운 중
@@ -277,7 +282,7 @@ async function handleCheck(req, res, body) {
   });
   if (!payload) return send(res, 200, { mode: 'fallback', reason: 'timeout' });
   if (payload.mode === 'fallback') return send(res, 200, payload);
-  return send(res, 200, buildResponse(payload.facts, asOf, position));
+  return send(res, 200, await buildResponse(payload.facts, asOf, position));
 }
 
 function createServer() {

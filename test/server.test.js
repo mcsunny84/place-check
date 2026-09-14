@@ -13,6 +13,8 @@ const home = fs.readFileSync(path.join(FX, 'kise-anguk-home.html'), 'utf8');
 const feed = fs.readFileSync(path.join(FX, 'kise-anguk-feed.html'), 'utf8');
 const photo = fs.readFileSync(path.join(FX, 'kise-anguk-photo.html'), 'utf8');
 const info = fs.readFileSync(path.join(FX, 'kise-anguk-information.html'), 'utf8');
+const rvis = fs.readFileSync(path.join(FX, 'kise-anguk-review-visitor.html'), 'utf8');
+srv.state.llm = null; // 테스트에서 LLM 호출 금지
 
 function resetState({ now = 1_800_000_000_000 } = {}) {
   const s = srv.state;
@@ -32,7 +34,7 @@ function fakeFetch(plan) {
   };
   return calls;
 }
-const okPlan = (url) => /\/home$/.test(url) ? { status: 200, text: home } : /\/information$/.test(url) ? { status: 200, text: info } : /\/feed$/.test(url) ? { status: 200, text: feed } : /\/photo$/.test(url) ? { status: 200, text: photo } : { status: 404, text: '' };
+const okPlan = (url) => /\/home$/.test(url) ? { status: 200, text: home } : /\/review\/visitor$/.test(url) ? { status: 200, text: rvis } : /\/information$/.test(url) ? { status: 200, text: info } : /\/feed$/.test(url) ? { status: 200, text: feed } : /\/photo$/.test(url) ? { status: 200, text: photo } : { status: 404, text: '' };
 
 function req(url, ip = '1.1.1.1') {
   return new Promise((resolve) => {
@@ -42,16 +44,18 @@ function req(url, ip = '1.1.1.1') {
 }
 const URL1 = 'https://m.place.naver.com/restaurant/2086785604/home';
 
-test('정상: 홈+3탭 fetch, 결과 auto, 캐시 저장', async () => {
+test('정상: 홈+4탭 fetch, 결과 auto, 캐시 저장', async () => {
   resetState(); const calls = fakeFetch(okPlan);
   srv.state.lastFetchStart = 0; // 간격 대기 0
   const t0 = Date.now();
   const r = await req(URL1);
   assert.equal(r.body.mode, 'auto');
   assert.equal(r.body.place.name, '키세카츠 안국역점');
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.ok(srv.readCache('2086785604'));
-  assert.ok(Date.now() - t0 >= 3 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.ok(Date.now() - t0 >= 4 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.equal(r.body.answers.D1, '2026-09-13', '리뷰 탭에서 D1 자동');
+  assert.ok(r.body.insight && r.body.insight.strengths.length === 5, '리뷰 인사이트');
 });
 
 test('캐시 hit: fetch 0, 쿨다운 중에도 반환', async () => {
@@ -112,9 +116,9 @@ test('URL 오류 → no_url / unsupported', async () => {
   assert.equal((await req('https://m.map.naver.com/search2/site.naver?code=123')).body.reason, 'unsupported');
 });
 
-test('단축 URL: 해석 1회 + 홈 + 탭 2개 = 4회', async () => {
+test('단축 URL: 해석 1회 + 홈 + 탭 3개 = 5회', async () => {
   resetState(); const calls = fakeFetch((url) => url.includes('naver.me') ? { status: 200, url: URL1, text: '' } : okPlan(url));
   const r = await req('https://naver.me/AbCd1234');
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 4);
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 5);
   assert.ok(!calls.some((u) => /\/photo$/.test(u)), 'photo 탭 생략');
 });
