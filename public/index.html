@@ -309,7 +309,7 @@
   }
   // 자동 진단 결과에서만 쓰는 섹션 래퍼 — 직접 체크 탭은 정적 sec-head가 이미 있다
   const kwSection = (kw) => `<section class="res">${secHead('05', '대표키워드', 'Keywords')}${renderKeywords(kw)}</section>`;
-  const draftSection = (text) => `<section class="res">${secHead('06', '상세설명 초안', 'Description Draft')}${renderDraft(text)}</section>`;
+  const draftSection = (d) => `<section class="res">${secHead('06', '상세설명 진단·제안', 'Description')}${renderDescription(d.description, d.draft)}</section>`;
 
   // ---------- 자동 진단 ----------
   let last = null;
@@ -347,7 +347,7 @@
     }
     html += renderInsight(d.insight);
     html += kwSection(d.keywords);
-    html += draftSection(d.draft);
+    html += draftSection(d);
     $('#auto-result').innerHTML = html;
     const rb = $('#refresh'); if (rb) rb.addEventListener('click', () => runCheck(true), { once: true });
     bindSup(d, {});
@@ -361,7 +361,7 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span></div></div>`) + renderScore(result, S.pickTodos(result), auto) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d.draft);
+      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span></div></div>`) + renderScore(result, S.pickTodos(result), auto) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
     }, { once: true });
