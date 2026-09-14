@@ -255,18 +255,21 @@
     html += renderKeywords(d.keywords);
     html += renderDraft(d.draft);
     $('#auto-result').innerHTML = html;
-    const sg = $('#sup-go');
-    if (sg) sg.addEventListener('click', () => {
+    bindSup(d, {});
+  }
+  function bindSup(d, prev) {
+    const sg = $('#sup-go'); if (!sg) return;
+    const p = d.place;
+    sg.addEventListener('click', () => {
       const extra = readAnswers($('#sup-form'), 'sup_');
       const merged = Object.assign({}, d.answers, extra);
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderKeywords(d.keywords) + renderDraft(d.draft);
-      // 값 복원
+      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">보충 답변 반영</span></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderKeywords(d.keywords) + renderDraft(d.draft);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
-      $('#sup-go').addEventListener('click', () => sg.click());
-    });
+      bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
+    }, { once: true });
   }
 
   // ---------- 셀프 체크 ----------
