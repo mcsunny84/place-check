@@ -12,7 +12,7 @@
 node server.js            # http://localhost:8090
 PORT=80 node server.js    # 포트 변경
 npm install               # @anthropic-ai/sdk (리뷰 요약용, 선택)
-node --test               # 테스트 (94개, 네트워크 0)
+node --test               # 테스트 (111개, 네트워크 0)
 ```
 
 ## 배포 (클라우드 VM, Ubuntu 기준)
@@ -54,8 +54,11 @@ lib/keyword.js            대표키워드 진단·추천, 주소/역/업종/메�
 lib/draft.js              Q&A식 상세설명 템플릿 (조사 자동)
 lib/copy.js               항목별 고정 문안 (why/how)
 lib/review-insight.js     리뷰 인사이트 — 장점 5·보완 5 (규칙 + 선택적 LLM)
+lib/keyword-llm.js        대표키워드 AI 추천(리뷰·블로그·방문 태그 근거)
+lib/draft-analysis.js     상세설명 진단 → 유지/고칠/추가 Q&A 제안
+lib/naver-searchad.js     검색광고 키워드도구 API(월 검색수)
 public/index.html         화면 1장 (자동 진단 / 직접 체크 / 안내)
-test/                     94 테스트 + 실측 픽스처(우리 매장 3곳)
+test/                     111 테스트 + 실측 픽스처(우리 매장 3곳)
 docs/                     기획·코덱스 교차검증 기록 (02→06 수렴본, 07 스파이크, 08 계약)
 ```
 
@@ -63,5 +66,6 @@ docs/                     기획·코덱스 교차검증 기록 (02→06 수렴�
 
 - 처리량 상한 약 800매장/시(매장당 fetch 3회 × 1.5초). 폭주 시 대기 90초 넘는 요청은 "직접 체크" 폴백.
 - 방문자 리뷰는 최근 20건만 읽는다(더 과거는 별도 GraphQL 필요). 리뷰 인사이트의 문장 요약(장점 5·보완 5)은 `.env`의 `ANTHROPIC_API_KEY`가 있으면 켜진다(모델 `REVIEW_MODEL`, 기본 claude-sonnet-5 (opus·haiku로 바꿀 수 있음), 매장당 1회 호출 후 24시간 캐시, 약 15~20초). 키가 없으면 규칙 기반 결과만 나온다.
+- 월 검색수: `.env`에 네이버 검색광고 API 라이선스 3종(`NAVER_AD_API_KEY`·`NAVER_AD_SECRET`·`NAVER_AD_CUSTOMER_ID`)이 있으면 키워드마다 월 검색수(PC+모바일)를 붙이고 AI 추천을 검색량순으로 정렬한다. 없으면 검색량 없이 동작.
 - 같은 가게는 24시간 캐시. 수정 후 확인은 화면의 "네이버에서 다시 읽어오기"(마지막 수집 10분 뒤부터 가능).
 - 네이버가 429/캡차를 주면 30분 쉬고 시험 1건으로 복귀. 그동안은 직접 체크만 동작.
