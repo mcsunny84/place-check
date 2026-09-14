@@ -14,7 +14,7 @@ const feed = fs.readFileSync(path.join(FX, 'kise-anguk-feed.html'), 'utf8');
 const photo = fs.readFileSync(path.join(FX, 'kise-anguk-photo.html'), 'utf8');
 const info = fs.readFileSync(path.join(FX, 'kise-anguk-information.html'), 'utf8');
 const rvis = fs.readFileSync(path.join(FX, 'kise-anguk-review-visitor.html'), 'utf8');
-srv.state.llm = null; // 테스트에서 LLM 호출 금지
+srv.state.llm = null; srv.state.llmKeywords = null; srv.state.llmDescription = null; // 테스트에서 LLM 호출 금지
 
 function resetState({ now = 1_800_000_000_000 } = {}) {
   const s = srv.state;
@@ -178,4 +178,21 @@ test('리뷰 GraphQL: 커서로 2페이지, 6개월 창 밖 제외, SSR 20건과
   assert.ok(ids.length >= 51 + 1, 'GraphQL 51 + SSR 병합');
   assert.equal(new Set(ids).size, ids.length, '중복 없음');
   assert.ok(r.body.insight.stats.windowDays === 180 && r.body.insight.stats.byMonth.length >= 2);
+});
+
+test('키워드 LLM 추천도 매장당 1회 후 캐시', async () => {
+  resetState(); fakeFetch(okPlan);
+  let calls = 0; srv.state.llmKeywords = async () => { calls += 1; return { keywords: [{ keyword: '안국 돈카츠', why: 'r' }], diagnosis: [] }; };
+  const r1 = await req(URL1); assert.equal(r1.body.keywords.llm.keywords[0].keyword, '안국 돈카츠'); assert.equal(calls, 1);
+  const r2 = await req(URL1, '8.8.8.8'); assert.equal(r2.body.keywords.llm.keywords.length, 1); assert.equal(calls, 1);
+  srv.state.llmKeywords = null;
+});
+
+test('상세설명 진단이 응답에 포함되고 LLM 제안은 캐시', async () => {
+  resetState(); fakeFetch(okPlan);
+  let calls = 0; srv.state.llmDescription = async () => { calls += 1; return { assessment: 'ok', keep: [], changes: [], add: [{ q: 'Q', a: 'A', why: 'w' }] }; };
+  const r1 = await req(URL1);
+  assert.ok(r1.body.description.analysis.length > 100); assert.equal(r1.body.description.llm.add.length, 1); assert.equal(calls, 1);
+  const r2 = await req(URL1, '9.9.9.1'); assert.equal(r2.body.description.llm.add.length, 1); assert.equal(calls, 1);
+  srv.state.llmDescription = null;
 });

@@ -10,6 +10,8 @@ const S = require('./lib/place-scoring');
 const K = require('./lib/keyword');
 const D = require('./lib/draft');
 const R = require('./lib/review-insight');
+const KL = require('./lib/keyword-llm');
+const DA = require('./lib/draft-analysis');
 
 // .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음
 try {
@@ -51,6 +53,8 @@ const state = {
   ipLog: new Map(),      // ip -> [epoch ms]
   fetchImpl: globalThis.fetch,
   llm: undefined,          // review-insight LLM 호출 함수(테스트 주입); undefined = ANTHROPIC_API_KEY 있으면 실제 호출
+  llmKeywords: undefined,  // keyword-llm 주입용(동일 규칙)
+  llmDescription: undefined, // draft-analysis 주입용
   now: () => Date.now(),
 };
 
@@ -262,12 +266,20 @@ async function buildResponse(facts, asOf, queuedPosition) {
   if (conv.includes('배달')) situations.push('배달');
   if (conv.includes('주차')) situations.push('주차');
   const existing = v(facts.keywords) || [];
-  const kctx = { name: v(facts.name), district, station, category: v(facts.category) || '', menus: kwMenus };
+  const reviewMenus = ((v(facts.reviewStats) || {}).menus || []).slice(0, 5).map((m) => m.name).filter((n) => n && n.length >= 2 && !/^(고기|맥주|생맥주|술|밥|물|음식)$/.test(n));
+  const kctx = { name: v(facts.name), district, station, category: v(facts.category) || '', menus: kwMenus, reviewMenus };
   const keywords = {
     current: existing,
     diagnosis: K.diagnoseKeywords(existing, kctx),
-    recommendations: K.recommendKeywords({ district, station, categoryNorm: cat.norm, suffix: cat.suffix, menus: kwMenus, situations, existing }),
+    recommendations: K.recommendKeywords({ district, station, categoryNorm: cat.norm, suffix: cat.suffix, menus: kwMenus, reviewMenus, situations, existing }),
+    llm: null,
   };
+  if (facts.keywords_llm !== undefined) keywords.llm = facts.keywords_llm;
+  else {
+    keywords.llm = await KL.recommendKeywordsLLM(facts, { station, existing, blogTitles: v(facts.blogTitles) || [] }, { llm: state.llmKeywords });
+    const pid = v(facts.placeId);
+    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: keywords.llm }); } catch { /* 무시 */ } }
+  }
   const hours = v(facts.businessHours);
   const hoursLine = hours && hours.length ? `${hours[0].day}~${hours[hours.length - 1].day} ${hours[0].start}~${hours[0].end}` : undefined;
   const booking = auto.C1 && auto.C1.state === 'pass' ? 'naver' : (v(facts.virtualPhone) || v(facts.phone)) ? 'phone' : null;
@@ -279,18 +291,30 @@ async function buildResponse(facts, asOf, queuedPosition) {
     takeout: conv.includes('포장'), delivery: conv.includes('배달'), group: conv.includes('단체 이용 가능'),
     accessor: v(facts.accessor) || undefined,
   });
+  // 상세설명: 현재 글 진단 → 빠진 것만 제안 (LLM은 현재 문장 기준 수정/추가, 매장당 1회 캐시)
+  const descText = v(facts.description) || '';
+  const dctx = { district, station, categoryNorm: cat.norm, reviewMenus, existing, booking, phone: v(facts.virtualPhone) || v(facts.phone) || undefined };
+  const descAnalysis = DA.analyzeDescription(descText, facts, dctx);
+  let descLLM;
+  if (facts.description_llm !== undefined) descLLM = facts.description_llm;
+  else {
+    descLLM = await DA.reviseDescriptionLLM(descText, facts, dctx, descAnalysis, { llm: state.llmDescription });
+    const pid = v(facts.placeId);
+    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), description_llm: descLLM }); } catch { /* 무시 */ } }
+  }
   // LLM 요약은 facts와 함께 캐시(24h) — 캐시 hit마다 재호출·재과금 방지
   let insight;
   if (facts.insight_llm !== undefined) insight = await R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm });
   else {
     insight = await R.buildInsight(facts, { asOf, llm: state.llm });
     const pid = v(facts.placeId);
-    if (insight && pid) { try { writeCache(pid, { ...facts, insight_llm: insight.llm || null }); } catch { /* 캐시 실패 무시 */ } }
+    if (insight && pid) { try { writeCache(pid, { ...(readCache(pid) || facts), insight_llm: insight.llm || null }); } catch { /* 캐시 실패 무시 */ } }
   }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
     answers, auto, result, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
+    description: { text: descText, analysis: descAnalysis, llm: descLLM },
   };
 }
 

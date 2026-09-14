@@ -89,7 +89,7 @@ test('recommendKeywords — 템플릿 순서·생략·중복·기존 표시', ()
   assert.ok(r.length <= 10);
   // 역·상황·메뉴2 없음 → 해당 템플릿 생략
   const s = K.recommendKeywords({ district: '종로구', categoryNorm: '돈카츠', suffix: '맛집', menus: ['로스카츠'], situations: [], existing: [] });
-  assert.deepEqual(s.map((x) => x.keyword), ['종로구 돈카츠', '종로구 맛집', '종로구 로스카츠', '종로구 돈카츠 추천']);
+  assert.deepEqual(s.map((x) => x.keyword), ['종로 돈카츠', '종로 맛집', '종로 로스카츠', '종로 돈카츠 추천']);
   // 메뉴2 없고 상황2 있으면 템플릿 10 = {역} {상황2}
   const t = K.recommendKeywords({ station: '안국', categoryNorm: '돈카츠', suffix: '맛집', menus: [], situations: ['혼밥', '회식'], existing: [] });
   assert.deepEqual(t.find((x) => x.template === 10), { keyword: '안국역 회식', template: 10, existing: false });
