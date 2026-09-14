@@ -36,10 +36,10 @@ function fakeFetch(plan) {
 }
 const okPlan = (url) => /\/home$/.test(url) ? { status: 200, text: home } : /\/review\/visitor$/.test(url) ? { status: 200, text: rvis } : /\/information$/.test(url) ? { status: 200, text: info } : /\/feed$/.test(url) ? { status: 200, text: feed } : /\/photo$/.test(url) ? { status: 200, text: photo } : { status: 404, text: '' };
 
-function req(url, ip = '1.1.1.1') {
+function req(url, ip = '1.1.1.1', extra = {}) {
   return new Promise((resolve) => {
     const res = { writeHead(code) { this.code = code; }, end(body) { resolve({ code: this.code, body: JSON.parse(body) }); } };
-    srv.handleCheck({ headers: { 'x-forwarded-for': ip }, socket: {} }, res, JSON.stringify({ url }));
+    srv.handleCheck({ headers: { 'x-forwarded-for': ip }, socket: {} }, res, JSON.stringify({ url, ...extra }));
   });
 }
 const URL1 = 'https://m.place.naver.com/restaurant/2086785604/home';
@@ -121,4 +121,29 @@ test('단축 URL: 해석 1회 + 홈 + 탭 3개 = 5회', async () => {
   const r = await req('https://naver.me/AbCd1234');
   assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 5);
   assert.ok(!calls.some((u) => /\/photo$/.test(u)), 'photo 탭 생략');
+});
+
+test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지나면 새로 fetch', async () => {
+  const s = resetState(); const calls = fakeFetch(okPlan);
+  await req(URL1);
+  const n = calls.length;
+  let r = await req(URL1, '5.5.5.5', { refresh: true });
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n); assert.equal(r.body.cache.refresh_denied, true);
+  s.tick(11 * 60 * 1000);
+  r = await req(URL1, '5.5.5.5', { refresh: true });
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n + 5, '새로 5회 fetch'); assert.equal(r.body.cache, undefined);
+  // refresh 없이 24시간 이내면 여전히 캐시
+  r = await req(URL1, '6.6.6.6');
+  assert.equal(calls.length, n + 5);
+});
+
+test('LLM 인사이트는 매장당 1회 호출 후 캐시 재사용', async () => {
+  resetState(); fakeFetch(okPlan);
+  let calls = 0;
+  srv.state.llm = async () => { calls += 1; return { strengths: ['s1', 's2', 's3'], improvements: ['i1', 'i2', 'i3'] }; };
+  const r1 = await req(URL1);
+  assert.equal(r1.body.insight.source, 'llm'); assert.equal(calls, 1);
+  const r2 = await req(URL1, '7.7.7.7');
+  assert.equal(r2.body.insight.source, 'llm'); assert.equal(r2.body.insight.llm.strengths[0], 's1'); assert.equal(calls, 1, '캐시 hit 시 재호출 없음');
+  srv.state.llm = null;
 });

@@ -11,11 +11,19 @@ const K = require('./lib/keyword');
 const D = require('./lib/draft');
 const R = require('./lib/review-insight');
 
+// .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch { /* .env 없음 */ }
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
 const LIB = path.join(__dirname, 'lib');
 const CACHE_DIR = process.env.PLACE_CACHE_DIR || path.join(__dirname, 'data', 'cache');
 const CACHE_TTL_MS = 24 * 3600 * 1000;
+const REFRESH_MIN_MS = 10 * 60 * 1000; // '다시 읽어오기'는 마지막 수집 후 10분 지나야 허용
 const FETCH_GAP_MS = 1500;
 const FETCH_TIMEOUT_MS = 8000;
 const REQUEST_DEADLINE_MS = 90 * 1000;
@@ -45,11 +53,11 @@ const state = {
 const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const cachePath = (id) => path.join(CACHE_DIR, `${id}.json`);
 
-function readCache(placeId) {
+function readCache(placeId, maxAge = CACHE_TTL_MS) {
   try {
     const j = JSON.parse(fs.readFileSync(cachePath(placeId), 'utf8'));
     const age = state.now() - Date.parse(j.fetched_at);
-    if (age >= 0 && age < CACHE_TTL_MS) return j;
+    if (age >= 0 && age < maxAge) return j;
   } catch { /* miss */ }
   return null;
 }
@@ -108,7 +116,7 @@ async function collect(job) {
     const parsed = parsePlaceUrl(r.url);
     if (!parsed.ok || parsed.needsResolve) return { mode: 'fallback', reason: 'unsupported_url' };
     placeId = parsed.placeId; type = parsed.type || 'place';
-    const cached = readCache(placeId);
+    const cached = readCache(placeId, job.refresh ? REFRESH_MIN_MS : CACHE_TTL_MS);
     if (cached) return { facts: cached, placeId };
   }
   const base = `https://pcmap.place.naver.com/${type}/${placeId}`;
@@ -154,7 +162,7 @@ async function pump() {
       const job = state.jobs.get(key);
       if (!job) { state.queue.shift(); continue; }
       if (!job.waiters.length) { finishJob(job, null); continue; } // 대기자 0 → 제거
-      const cached = job.placeId && readCache(job.placeId);
+      const cached = job.placeId && readCache(job.placeId, job.refresh ? REFRESH_MIN_MS : CACHE_TTL_MS);
       if (cached) { finishJob(job, { facts: cached, placeId: job.placeId }); continue; }
       const wasProbe = state.probing;
       try {
@@ -176,7 +184,7 @@ function enqueue(parsed) {
   let job = state.jobs.get(key);
   if (job) return job; // 합류
   if (state.queue.length >= QUEUE_MAX) return null;
-  job = { key, placeId: parsed.placeId, type: parsed.type, shortUrl: parsed.shortUrl, waiters: [], started: false };
+  job = { key, placeId: parsed.placeId, type: parsed.type, shortUrl: parsed.shortUrl, waiters: [], started: false, refresh: !!parsed.refresh };
   state.jobs.set(key, job);
   state.queue.push(key);
   return job;
@@ -184,9 +192,9 @@ function enqueue(parsed) {
 
 // ---------- 결과 조립 ----------
 async function buildResponse(facts, asOf, queuedPosition) {
+  const v = (o) => (o && o.status === 'value' ? o.value : null);
   const { answers, auto } = factsToAnswers(facts, { asOf });
   const result = S.computeScore(answers, { asOf });
-  const v = (o) => (o && o.status === 'value' ? o.value : null);
   const district = K.extractDistrict(v(facts.roadAddress) || '');
   const station = (v(facts.subwayStations) || [])[0] || null;
   const cat = K.normalizeCategory(v(facts.category) || '');
@@ -217,7 +225,14 @@ async function buildResponse(facts, asOf, queuedPosition) {
     takeout: conv.includes('포장'), delivery: conv.includes('배달'), group: conv.includes('단체 이용 가능'),
     accessor: v(facts.accessor) || undefined,
   });
-  const insight = await R.buildInsight(facts, { asOf, llm: state.llm });
+  // LLM 요약은 facts와 함께 캐시(24h) — 캐시 hit마다 재호출·재과금 방지
+  let insight;
+  if (facts.insight_llm !== undefined) insight = await R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm });
+  else {
+    insight = await R.buildInsight(facts, { asOf, llm: state.llm });
+    const pid = v(facts.placeId);
+    if (insight && pid) { try { writeCache(pid, { ...facts, insight_llm: insight.llm || null }); } catch { /* 캐시 실패 무시 */ } }
+  }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
@@ -251,10 +266,11 @@ async function handleCheck(req, res, body) {
   if (!parsed.ok) return send(res, 200, { mode: 'fallback', reason: parsed.reason });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   const asOf = kstDate(state.now());
-  // 캐시 hit — 쿨다운·IP 한도 무관
+  const refresh = input.refresh === true;
+  // 캐시 hit — 쿨다운·IP 한도 무관. refresh면 10분 이내 수집분만 재사용(그보다 오래됐으면 새로 읽음)
   if (!parsed.needsResolve) {
-    const cached = readCache(parsed.placeId);
-    if (cached) return send(res, 200, await buildResponse(cached, asOf, 0));
+    const cached = readCache(parsed.placeId, refresh ? REFRESH_MIN_MS : CACHE_TTL_MS);
+    if (cached) { const out = await buildResponse(cached, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
   }
   if (inCooldown()) {
     // 만료 여부는 inCooldown이 판단. 여기 왔다면 아직 쿨다운 중
@@ -266,7 +282,7 @@ async function handleCheck(req, res, body) {
     if (!state.jobs.has(key)) return send(res, 200, { mode: 'fallback', reason: 'cooldown' });
   }
   if (!ipAllowed(ip)) return send(res, 429, { mode: 'fallback', reason: 'ip_limit' });
-  const job = enqueue(parsed);
+  const job = enqueue({ ...parsed, refresh });
   if (!job) return send(res, 200, { mode: 'fallback', reason: 'busy' });
   if (state.cooldownUntil && !state.probing && state.now() >= state.cooldownUntil && !state.running) {
     state.probing = true; state.cooldownUntil = 0; // 만료 후 첫 miss 작업 = 시험
@@ -302,4 +318,4 @@ if (require.main === module) {
   createServer().listen(PORT, () => console.log(`place-check http://localhost:${PORT}`));
 }
 
-module.exports = { createServer, state, handleCheck, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
+module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };

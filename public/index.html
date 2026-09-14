@@ -242,12 +242,12 @@
 
   // ---------- 자동 진단 ----------
   let last = null;
-  $('#go').addEventListener('click', async () => {
+  async function runCheck(refresh) {
     const url = $('#url').value.trim(); if (!url) return;
     $('#status').innerHTML = '<span class="spin"></span> 네이버에서 정보를 읽는 중… (최대 90초)';
     $('#auto-result').innerHTML = '';
     let data;
-    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url }) }); data = await res.json(); }
+    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh }) }); data = await res.json(); }
     catch (e) { data = { mode:'fallback', reason:'network' }; }
     $('#status').textContent = '';
     if (data.mode !== 'auto') {
@@ -257,10 +257,16 @@
     }
     last = data;
     renderAuto();
-  });
+  }
+  $('#go').addEventListener('click', () => runCheck(false));
+  function refreshBtn(d) {
+    const age = (Date.now() - Date.parse(d.place.fetched_at || 0)) / 60000;
+    if (age < 10) return `<p class="muted" style="margin:6px 0 0">수정 후 다시 검사하려면 ${Math.ceil(10 - age)}분 뒤 "다시 읽어오기"를 누르세요.${d.cache && d.cache.refresh_denied ? ' (방금 읽은 자료를 다시 보여드렸어요)' : ''}</p>`;
+    return `<button class="ghost" id="refresh" style="margin-top:8px">네이버에서 다시 읽어오기</button><span class="muted"> 수정한 뒤 반영 확인용</span>`;
+  }
   function renderAuto() {
     const d = last; const p = d.place;
-    let html = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">${esc(p.category || '')} · ${esc(p.address || '')}</span><p class="muted" style="margin:4px 0 0">읽은 시각 ${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</p></div>`;
+    let html = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">${esc(p.category || '')} · ${esc(p.address || '')}</span><p class="muted" style="margin:4px 0 0">읽은 시각 ${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</p>${refreshBtn(d)}</div>`;
     html += renderScore(d.result, d.todos, d.auto);
     if (d.supplement && d.supplement.length) {
       html += `<div class="grp">자동으로 못 읽은 것 — 답하면 더 정확해져요</div><form id="sup-form"><div class="card">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}<button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`;
@@ -269,6 +275,7 @@
     html += renderKeywords(d.keywords);
     html += renderDraft(d.draft);
     $('#auto-result').innerHTML = html;
+    const rb = $('#refresh'); if (rb) rb.addEventListener('click', () => runCheck(true), { once: true });
     bindSup(d, {});
   }
   function bindSup(d, prev) {
