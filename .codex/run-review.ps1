@@ -3,7 +3,7 @@ $codex = 'C:\Users\Design\AppData\Local\OpenAI\Codex\bin\bffc5354119c8421\codex.
 $root = 'C:\Users\Design\Dev\claudecode\place-check'
 $prompt = "$root\.codex\code-review-prompt.txt"
 $log = "$root\.codex\code-review.log"
-$target = Get-Date -Hour 23 -Minute 47 -Second 0
+$target = (Get-Date -Hour 2 -Minute 50 -Second 0); if ((Get-Date) -gt $target) { $target = $target.AddDays(1) }
 if ((Get-Date) -lt $target) { Start-Sleep -Seconds ([int](($target - (Get-Date)).TotalSeconds)) }
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)

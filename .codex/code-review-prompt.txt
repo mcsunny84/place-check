@@ -1,5 +1,15 @@
-역할: 코드 리뷰어(Codex gpt-6-astra). 이 저장소(place-check)는 방금 구현된 무료 웹 도구다. 설계 수렴본은 docs/06_Claude_회신_05_및_v0.7_최종.md, 모듈 계약은 docs/08_모듈_계약.md, 실측은 docs/07_스파이크_결과.md. 코드: server.js, lib/*.js, public/index.html, test/*.js. `node --test`는 84개 통과 상태.
+역할: 코드 리뷰어(Codex gpt-6-astra). 이 저장소(place-check)는 오늘 구현된 무료 웹 도구다. 설계 수렴본 docs/06_Claude_회신_05_및_v0.7_최종.md, 모듈 계약 docs/08_모듈_계약.md, 실측 docs/07_스파이크_결과.md(3차 실측·리뷰 GraphQL 포함). `node --test` 111개 통과 상태. README.md에 구조 요약.
 
-검토 범위(동작 정확성·설계 계약 일치만, 약관·보안 정책·사업성 제외): (1) server.js 큐·캐시·쿨다운·IP 제한·90초 마감·단축 URL 예산이 06번 §3 전이표와 일치하는가 — 교착·누수(waiters/jobs/queue 정리 누락)·경쟁 조건 (2) facts-to-answers가 06번 §1.1 우선순위·§1.2 18행과 어긋나는 곳 (3) place-scoring 산식·경계 (4) place-parse의 empty/missing 구분 오류 가능성(실제 픽스처 test/fixtures/*.html 참고 가능) (5) keyword/draft 정규화 반례 (6) index.html 렌더가 계산 결과와 어긋나는 곳(보충 재계산 흐름·값 복원·XSS 이스케이프 누락) (7) 테스트가 놓친 결정적 경로. 필요하면 `node --test`나 순수 함수를 직접 실행해 확인해도 됨(네트워크 요청 금지, 코드 수정 금지).
+검토 범위(동작 정확성·설계 계약 일치만, 약관·보안 정책·사업성 제외):
+(1) server.js — 큐·캐시·쿨다운·IP 제한·90초 마감·refresh(10분)·예산(BUDGET 11: 홈+탭 2+리뷰 GraphQL≤6+여유)·collectReviews 커서 루프·LLM 3종 Promise.all과 캐시 병합(readCache||facts) — 교착·누수(waiters/jobs/queue)·경쟁 조건·캐시 덮어쓰기 손실
+(2) lib/place-parse.js — empty/missing 구분, reviewDate(연도 없음·2자리 연도·미래→작년), parseReviewVisitor/normalizeReview/dedupe
+(3) lib/facts-to-answers.js — 06번 §1.1 우선순위·18행과 어긋나는 곳(특히 A1 phonePrivate, A3 요일 규칙, A4 road, B6/C3 첫 페이지 판정, D1/D2 리뷰 기반)
+(4) lib/review-insight.js, lib/keyword-llm.js, lib/draft-analysis.js — LLM 결과 검증 부족·프롬프트 주입(리뷰 본문이 프롬프트에 그대로 들어감)·JSON 스키마 처리·실패 시 폴백
+(5) lib/naver-searchad.js — HMAC 서명·배치·'< 10' 처리·오류 전파
+(6) lib/keyword.js shortDistrict/GENERIC_CAT 보정, lib/draft-analysis analyzeDescription 정규식 오탐
+(7) public/index.html — 보충 재계산·refresh 버튼·값 복원·XSS 이스케이프 누락(특히 LLM 문자열·리뷰 본문 발췌)·상태 라벨
+(8) deploy.sh — Ubuntu에서 실제로 돌아가는가(권한·경로·systemd)
+(9) 테스트가 놓친 결정적 경로
 
-출력: docs/09_GPT_코드리뷰_v1.md 작성(한국어). 형식: ## 0 총평(배포 가능/조건부/불가) ## 1 이슈 C-n | 심각도(Blocker/Major/Minor) | 파일:줄 | 문제 | 재현·근거 | 최소 수정 ## 2 놓친 테스트. Blocker는 실제 오동작·데이터 손상·교착에만. 표현 취향 지적 금지.
+필요하면 `node --test`나 순수 함수를 직접 실행해 확인해도 됨(네트워크 요청 금지, 코드 수정 금지, .env 읽지 말 것).
+출력: docs/09_GPT_코드리뷰_v1.md 작성(한국어). 형식: ## 0 총평(배포 가능/조건부/불가) ## 1 이슈 C-n | 심각도(Blocker/Major/Minor) | 파일:줄 | 문제 | 재현·근거 | 최소 수정 ## 2 놓친 테스트. Blocker는 실제 오동작·데이터 손상·교착·XSS에만. 표현 취향 지적 금지.
