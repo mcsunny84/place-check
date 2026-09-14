@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 process.env.PLACE_CACHE_DIR = path.join(require('node:os').tmpdir(), 'place-check-test-cache');
+process.env.PLACE_STATS_FILE = path.join(require('node:os').tmpdir(), 'place-check-test-cache', 'coupons.jsonl');
 fs.mkdirSync(process.env.PLACE_CACHE_DIR, { recursive: true });
 const srv = require('../server');
 
@@ -27,16 +28,18 @@ function resetState({ now = 1_800_000_000_000 } = {}) {
 function fakeFetch(plan) {
   // plan: (url) => {status, text} | Error
   const calls = [];
-  srv.state.fetchImpl = async (url) => {
+  srv.state.fetchImpl = async (url, opts) => {
     calls.push(url);
-    const r = plan(url, calls.length);
+    const r = plan(url, calls.length, opts);
     if (r instanceof Error) throw r;
     return { status: r.status, url: r.url || url, text: async () => r.text };
   };
   return calls;
 }
 const GQL_EMPTY = JSON.stringify([{ data: { visitorReviews: { total: 0, items: [] } } }]);
-const okPlan = (url) => /graphql/.test(url) ? { status: 200, text: GQL_EMPTY } : /\/home$/.test(url) ? { status: 200, text: home } : /\/review\/visitor$/.test(url) ? { status: 200, text: rvis } : /\/information$/.test(url) ? { status: 200, text: info } : /\/feed$/.test(url) ? { status: 200, text: feed } : /\/photo$/.test(url) ? { status: 200, text: photo } : { status: 404, text: '' };
+const GQL_COUPONS = JSON.stringify([{ data: { unifiedCoupons: { total: 1, coupons: [{ promotionTitle: '알림받기 쿠폰', conditionType: 'PLACE_BENEFIT_NOTIFICATION_SUBSCRIBED', title: '음료 1잔', type: 'gift', status: 'download', expiredPeriodInfo: '', usedConditionInfos: [] }], memberships: [] } } }]);
+const isCouponReq = (opts) => !!(opts && opts.body && String(opts.body).includes('getUnifiedCoupons'));
+const okPlan = (url, n, opts) => /graphql/.test(url) ? { status: 200, text: isCouponReq(opts) ? GQL_COUPONS : GQL_EMPTY } : /\/home$/.test(url) ? { status: 200, text: home } : /\/review\/visitor$/.test(url) ? { status: 200, text: rvis } : /\/information$/.test(url) ? { status: 200, text: info } : /\/feed$/.test(url) ? { status: 200, text: feed } : /\/photo$/.test(url) ? { status: 200, text: photo } : { status: 404, text: '' };
 
 function req(url, ip = '1.1.1.1', extra = {}) {
   return new Promise((resolve) => {
@@ -46,16 +49,17 @@ function req(url, ip = '1.1.1.1', extra = {}) {
 }
 const URL1 = 'https://m.place.naver.com/restaurant/2086785604/home';
 
-test('정상: 홈+2탭+리뷰 GraphQL 1회 fetch, 결과 auto, 캐시 저장', async () => {
+test('정상: 홈+2탭+리뷰 GraphQL 1회+쿠폰 1회 fetch, 결과 auto, 캐시 저장', async () => {
   resetState(); const calls = fakeFetch(okPlan);
   srv.state.lastFetchStart = 0; // 간격 대기 0
   const t0 = Date.now();
   const r = await req(URL1);
   assert.equal(r.body.mode, 'auto');
   assert.equal(r.body.place.name, '키세카츠 안국역점');
-  assert.equal(calls.length, 4);
+  assert.equal(calls.length, 5);
   assert.ok(srv.readCache('2086785604'));
-  assert.ok(Date.now() - t0 >= 3 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.ok(Date.now() - t0 >= 4 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.equal(r.body.coupons.count, 1); assert.equal(r.body.coupons.hasNotification, true); assert.equal(r.body.answers.C3, 'yes');
   assert.equal(r.body.answers.A4, 'yes', '찾아오는 길 = base.road');
   assert.equal(r.body.answers.B5, 23, '사진 수는 홈에서');
   assert.equal(r.body.answers.D1, '2026-09-13', '리뷰 탭에서 D1 자동');
@@ -120,10 +124,10 @@ test('URL 오류 → no_url / unsupported', async () => {
   assert.equal((await req('https://m.map.naver.com/search2/site.naver?code=123')).body.reason, 'unsupported');
 });
 
-test('단축 URL: 해석 1회 + 홈 + 탭 2개 + GraphQL 1회 = 5회', async () => {
+test('단축 URL: 해석 1회 + 홈 + 탭 2개 + GraphQL 2회 = 6회', async () => {
   resetState(); const calls = fakeFetch((url) => url.includes('naver.me') ? { status: 200, url: URL1, text: '' } : okPlan(url));
   const r = await req('https://naver.me/AbCd1234');
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 5);
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 6);
 });
 
 test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지나면 새로 fetch', async () => {
@@ -134,10 +138,10 @@ test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지
   assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n); assert.equal(r.body.cache.refresh_denied, true);
   s.tick(11 * 60 * 1000);
   r = await req(URL1, '5.5.5.5', { refresh: true });
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n + 4, '새로 4회 fetch'); assert.equal(r.body.cache, undefined);
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n + 5, '새로 5회 fetch'); assert.equal(r.body.cache, undefined);
   // refresh 없이 24시간 이내면 여전히 캐시
   r = await req(URL1, '6.6.6.6');
-  assert.equal(calls.length, n + 4);
+  assert.equal(calls.length, n + 5);
 });
 
 test('LLM 인사이트는 매장당 1회 호출 후 캐시 재사용', async () => {
@@ -155,7 +159,7 @@ test('추가 탭 일시 실패 → 1회 재시도 후 성공', async () => {
   resetState(); let photoTries = 0;
   const calls = fakeFetch((url) => { if (/\/feed$/.test(url)) { photoTries += 1; if (photoTries === 1) return new Error('timeout'); } return okPlan(url); });
   const r = await req(URL1);
-  assert.equal(r.body.mode, 'auto'); assert.equal(photoTries, 2); assert.equal(calls.length, 5);
+  assert.equal(r.body.mode, 'auto'); assert.equal(photoTries, 2); assert.equal(calls.length, 6);
   assert.equal(srv.readCache('2086785604').feeds.status, 'value');
 });
 
@@ -166,13 +170,13 @@ test('리뷰 GraphQL: 커서로 2페이지, 6개월 창 밖 제외, SSR 20건과
   const page2 = [mk(100, '4.1.수'), mk(101, '2.1.일')]; // 2026-04-01(창 안), 2026-02-01(창 밖)
   const gqlCalls = [];
   fakeFetch((url, n, opts) => {
-    if (/graphql/.test(url)) { gqlCalls.push(1); return { status: 200, text: JSON.stringify([{ data: { visitorReviews: { total: 999, items: gqlCalls.length === 1 ? page1 : page2 } } }]) }; }
+    if (/graphql/.test(url)) { if (isCouponReq(opts)) return { status: 200, text: GQL_COUPONS }; gqlCalls.push(1); return { status: 200, text: JSON.stringify([{ data: { visitorReviews: { total: 999, items: gqlCalls.length === 1 ? page1 : page2 } } }]) }; }
     return okPlan(url);
   });
   const r = await req(URL1);
   assert.equal(r.body.mode, 'auto');
   const c = srv.readCache('2086785604');
-  assert.equal(gqlCalls.length, 2, '50건 꽉 찬 첫 페이지 → 둘째 페이지');
+  assert.equal(gqlCalls.length, 2, '50건 꽉 찬 첫 페이지 → 둘째 페이지 (쿠폰 요청은 별도 카운트)');
   assert.equal(c.reviewWindow.value.days, 180);
   const ids = c.reviews.value.map((x) => x.id);
   assert.ok(ids.includes('g100') && !ids.includes('g101'), '2월 리뷰는 6개월 창 밖');
@@ -208,4 +212,19 @@ test('검색광고 키 있으면 월 검색수 조회·정렬·캐시', async ()
   assert.ok(adCalls >= 1); assert.equal(r1.body.keywords.llm.keywords[0].keyword, '안국역 맛집', '검색량 내림차순'); assert.equal(r1.body.keywords.llm.keywords[0].volume, 3900);
   const n = adCalls; const r2 = await req(URL1, '9.9.9.2'); assert.equal(adCalls, n, '캐시'); assert.equal(r2.body.keywords.llm.keywords[0].volume, 3900);
   srv.state.llmKeywords = null; srv.state.adEnv = {}; srv.state.fetchAd = undefined;
+});
+
+test('쿠폰 백데이터: 신규 수집 시 1줄 기록, 캐시 hit는 기록 없음, 관리자 집계 API', async () => {
+  resetState(); fakeFetch(okPlan);
+  try { fs.unlinkSync(process.env.PLACE_STATS_FILE); } catch {}
+  await req(URL1); await req(URL1, '4.4.4.4');
+  const lines = fs.readFileSync(process.env.PLACE_STATS_FILE, 'utf8').split('\n').filter(Boolean);
+  assert.equal(lines.length, 1); const l = JSON.parse(lines[0]); assert.equal(l.placeId, '2086785604'); assert.equal(l.hasNotification, true); assert.ok(!('fresh' in (srv.readCache('2086785604') || {})));
+  process.env.ADMIN_TOKEN = 't0k';
+  const res = { writeHead(code) { this.code = code; }, end(body) { this.body = body; } };
+  const server = srv.createServer();
+  await new Promise((resolve) => { server.emit('request', { method: 'GET', url: '/api/stats/coupons?token=t0k', headers: {}, socket: {} }, { ...res, end(body) { res.end(body); resolve(); } }); });
+  const agg = JSON.parse(res.body); assert.equal(agg.stores, 1); assert.equal(agg.withNotification, 1);
+  await new Promise((resolve) => { server.emit('request', { method: 'GET', url: '/api/stats/coupons?token=wrong', headers: {}, socket: {} }, { writeHead(c) { this.c = c; }, end() { assert.equal(this.c, 404); resolve(); } }); });
+  delete process.env.ADMIN_TOKEN;
 });

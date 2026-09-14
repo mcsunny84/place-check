@@ -12,6 +12,7 @@ const D = require('./lib/draft');
 const R = require('./lib/review-insight');
 const KL = require('./lib/keyword-llm');
 const DA = require('./lib/draft-analysis');
+const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
 
 // .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음
@@ -25,6 +26,7 @@ const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
 const LIB = path.join(__dirname, 'lib');
 const CACHE_DIR = process.env.PLACE_CACHE_DIR || path.join(__dirname, 'data', 'cache');
+const STATS_FILE = process.env.PLACE_STATS_FILE || path.join(__dirname, 'data', 'stats', 'coupons.jsonl');
 const CACHE_TTL_MS = 24 * 3600 * 1000;
 const REFRESH_MIN_MS = 10 * 60 * 1000; // '다시 읽어오기'는 마지막 수집 후 10분 지나야 허용
 const FETCH_GAP_MS = 1500;
@@ -42,6 +44,7 @@ const GQL_URL = 'https://pcmap-api.place.naver.com/graphql';
 const GQL_REVIEWS = 'query getVisitorReviews($input: VisitorReviewsInput) { visitorReviews(input: $input) { total items { id rating body visited created cursor reply { body created } votedKeywords { name } visitCategories { keywords { name } } } } }';
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
+fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
 
 // ---------- 상태 ----------
 const state = {
@@ -135,6 +138,23 @@ async function fetchReviewsPage({ placeId, type, after }) {
   return v && Array.isArray(v.items) ? v.items : null;
 }
 
+// 쿠폰 현황(GraphQL getUnifiedCoupons) — 1회. 실패는 missing.
+async function fetchCoupons({ placeId, type }) {
+  await gapWait();
+  const res = await state.fetchImpl(GQL_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': UA, 'accept-language': 'ko-KR,ko;q=0.9', referer: `https://pcmap.place.naver.com/${type}/${placeId}/home`, origin: 'https://pcmap.place.naver.com' },
+    body: JSON.stringify([{ operationName: 'getUnifiedCoupons', variables: { input: { businessId: placeId } }, query: CP.GQL_COUPONS }]),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (res.status === 429) throw new Blocked('429');
+  const text = await res.text();
+  if (/보안 확인|자동 입력 방지|captcha/i.test(text) && !text.startsWith('[')) throw new Blocked('captcha');
+  let j; try { j = JSON.parse(text); } catch { return null; }
+  const uc = j && j[0] && j[0].data && j[0].data.unifiedCoupons;
+  return CP.normalizeCoupons(uc);
+}
+
 // 최근 REVIEW_DAYS일 리뷰를 커서로 모은다. 예산 내에서만, 실패는 조용히 중단(SSR 20건이 폴백).
 async function collectReviews(job, placeId, type, facts, budgetRef) {
   const now = new Date(state.now());
@@ -202,7 +222,13 @@ async function collect(job) {
   }
   const budgetRef = { n: budget };
   try { facts = await collectReviews(job, placeId, type, facts, budgetRef); } catch (e) { if (e instanceof Blocked) throw e; }
-  writeCache(placeId, facts);
+  if (budgetRef.n > 0) {
+    budgetRef.n -= 1;
+    try { const c = await fetchCoupons({ placeId, type }); facts = { ...facts, coupons: c ? { status: 'value', value: c } : { status: 'missing' } }; }
+    catch (e) { if (e instanceof Blocked) throw e; facts = { ...facts, coupons: { status: 'missing' } }; }
+  } else facts = { ...facts, coupons: { status: 'missing' } };
+  facts = { ...facts, fresh: true }; // 방금 수집(캐시 아님) 표시 — 통계 기록용
+  writeCache(placeId, { ...facts, fresh: undefined });
   return { facts, placeId };
 }
 
@@ -302,6 +328,11 @@ async function buildResponse(facts, asOf, queuedPosition) {
     cachedIns ? R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm }) : R.buildInsight(facts, { asOf, llm: state.llm }),
   ]);
   keywords.llm = kwLLM;
+  const coupons = CP.couponInsight(facts);
+  if (facts.fresh) {
+    const line = CP.statsLine(facts, { district, score: result.score, now: state.now() });
+    if (line) { try { fs.appendFileSync(STATS_FILE, JSON.stringify(line) + '\n'); } catch { /* 통계 실패 무시 */ } }
+  }
   // 월 검색수(네이버 검색광고 키워드도구) — 라이선스 3종이 .env에 있을 때만. 현재+AI+규칙 상위 후보 한 번에, 매장당 1회 캐시.
   let volumes = facts.keywords_volume !== undefined ? facts.keywords_volume : undefined;
   const wantVol = [...existing, ...((kwLLM && kwLLM.keywords) || []).map((k) => k.keyword), ...keywords.recommendations.slice(0, 5).map((r) => r.keyword)];
@@ -326,6 +357,7 @@ async function buildResponse(facts, asOf, queuedPosition) {
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
     answers, auto, result, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
     description: { text: descText, analysis: descAnalysis, llm: descLLM },
+    coupons,
   };
 }
 
@@ -397,6 +429,13 @@ function createServer() {
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
       req.on('end', () => handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) })));
       return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/stats/coupons')) {
+      const token = new URL(req.url, 'http://x').searchParams.get('token');
+      if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) return send(res, 404, 'not found', 'text/plain');
+      let lines = [];
+      try { lines = fs.readFileSync(STATS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }); } catch { /* 없음 */ }
+      return send(res, 200, { file: STATS_FILE, records: lines.length, ...CP.aggregate(lines) });
     }
     if (req.method === 'GET') return serveStatic(req, res);
     send(res, 405, 'method not allowed', 'text/plain');
