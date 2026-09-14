@@ -67,9 +67,11 @@ const state = {
 const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const cachePath = (id) => path.join(CACHE_DIR, `${id}.json`);
 
+const CACHE_SCHEMA = 2; // facts 구조가 바뀌면 올린다(구 캐시 무시) — 2: coupons 필드 추가
 function readCache(placeId, maxAge = CACHE_TTL_MS) {
   try {
     const j = JSON.parse(fs.readFileSync(cachePath(placeId), 'utf8'));
+    if (j._schema !== CACHE_SCHEMA) return null;
     const age = state.now() - Date.parse(j.fetched_at);
     if (age >= 0 && age < maxAge) return j;
   } catch { /* miss */ }
@@ -77,7 +79,7 @@ function readCache(placeId, maxAge = CACHE_TTL_MS) {
 }
 function writeCache(placeId, facts) {
   const tmp = cachePath(placeId) + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(facts));
+  fs.writeFileSync(tmp, JSON.stringify({ ...facts, _schema: CACHE_SCHEMA }));
   fs.renameSync(tmp, cachePath(placeId));
 }
 
