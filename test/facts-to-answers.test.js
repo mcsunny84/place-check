@@ -201,9 +201,10 @@ test('C3: 쿠폰 ≥1 → yes / 0 + EVENT 기간 판정 (자정 경계) / feeds 
   assert.equal(st({ hasCouponCount: V(0), feeds: M }, 'C3'), 'unknown');
   assert.equal(st({ hasCouponCount: V(0), feeds: V([]), feedsComplete: V(false) }, 'C3'), 'fail'); // 첫 페이지 기준 판정
   assert.equal(st({ hasCouponCount: M, feeds: V([]), feedsComplete: V(true) }, 'C3'), 'unknown');
-  // 기간 missing인 EVENT → unknown (진행 중 EVENT가 따로 있으면 pass)
+  // 기간 없는 EVENT → 최근 90일 내 작성이면 진행 중, 아니면 no
   const noPeriod = { ...ev, period: null, periodStart: undefined, periodEnd: undefined };
-  assert.equal(st({ hasCouponCount: V(0), feeds: V([noPeriod]), feedsComplete: V(true) }, 'C3'), 'unknown');
+  assert.equal(st({ hasCouponCount: V(0), feeds: V([noPeriod]), feedsComplete: V(true) }, 'C3', '2026-09-14'), 'pass');
+  assert.equal(st({ hasCouponCount: V(0), feeds: V([{ ...noPeriod, createdAt: '2026-01-01' }]), feedsComplete: V(true) }, 'C3', '2026-09-14'), 'fail');
   const live = { ...ev, periodStart: '2026-09-10', periodEnd: '2026-09-14' };
   assert.equal(raw({ hasCouponCount: V(0), feeds: V([noPeriod, live]), feedsComplete: V(true) }, 'C3'), 'yes');
   assert.equal(raw({ hasCouponCount: M, feeds: V([live]), feedsComplete: V(false) }, 'C3'), 'yes'); // 긍정 증거 우선
