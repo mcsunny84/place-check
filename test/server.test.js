@@ -196,3 +196,15 @@ test('상세설명 진단이 응답에 포함되고 LLM 제안은 캐시', async
   const r2 = await req(URL1, '9.9.9.1'); assert.equal(r2.body.description.llm.add.length, 1); assert.equal(calls, 1);
   srv.state.llmDescription = null;
 });
+
+test('검색광고 키 있으면 월 검색수 조회·정렬·캐시', async () => {
+  resetState(); fakeFetch(okPlan);
+  srv.state.llmKeywords = async () => ({ keywords: [{ keyword: '안국 돈카츠', why: 'a' }, { keyword: '안국역 맛집', why: 'b' }], diagnosis: [] });
+  let adCalls = 0;
+  srv.state.adEnv = { NAVER_AD_API_KEY: 'k', NAVER_AD_SECRET: 's', NAVER_AD_CUSTOMER_ID: '1' };
+  srv.state.fetchAd = async (url) => { adCalls += 1; const hints = decodeURIComponent(url.split('hintKeywords=')[1].split('&')[0]).split(','); return { status: 200, json: async () => ({ keywordList: hints.map((h) => ({ relKeyword: h, monthlyPcQcCnt: h === '안국역맛집' ? 900 : 10, monthlyMobileQcCnt: h === '안국역맛집' ? 3000 : 20 })) }) }; };
+  const r1 = await req(URL1);
+  assert.ok(adCalls >= 1); assert.equal(r1.body.keywords.llm.keywords[0].keyword, '안국역 맛집', '검색량 내림차순'); assert.equal(r1.body.keywords.llm.keywords[0].volume, 3900);
+  const n = adCalls; const r2 = await req(URL1, '9.9.9.2'); assert.equal(adCalls, n, '캐시'); assert.equal(r2.body.keywords.llm.keywords[0].volume, 3900);
+  srv.state.llmKeywords = null; srv.state.adEnv = undefined; srv.state.fetchAd = undefined;
+});

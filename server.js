@@ -12,6 +12,7 @@ const D = require('./lib/draft');
 const R = require('./lib/review-insight');
 const KL = require('./lib/keyword-llm');
 const DA = require('./lib/draft-analysis');
+const AD = require('./lib/naver-searchad');
 
 // .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음
 try {
@@ -55,6 +56,8 @@ const state = {
   llm: undefined,          // review-insight LLM 호출 함수(테스트 주입); undefined = ANTHROPIC_API_KEY 있으면 실제 호출
   llmKeywords: undefined,  // keyword-llm 주입용(동일 규칙)
   llmDescription: undefined, // draft-analysis 주입용
+  fetchAd: undefined,        // 검색광고 API fetch 주입(테스트)
+  adEnv: undefined,          // 검색광고 자격증명 env 주입(테스트)
   now: () => Date.now(),
 };
 
@@ -298,9 +301,23 @@ async function buildResponse(facts, asOf, queuedPosition) {
     cachedIns ? R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm }) : R.buildInsight(facts, { asOf, llm: state.llm }),
   ]);
   keywords.llm = kwLLM;
-  if (!(cachedKw && cachedDesc && cachedIns)) {
+  // 월 검색수(네이버 검색광고 키워드도구) — 라이선스 3종이 .env에 있을 때만. 현재+AI+규칙 상위 후보 한 번에, 매장당 1회 캐시.
+  let volumes = facts.keywords_volume !== undefined ? facts.keywords_volume : undefined;
+  const wantVol = [...existing, ...((kwLLM && kwLLM.keywords) || []).map((k) => k.keyword), ...keywords.recommendations.slice(0, 5).map((r) => r.keyword)];
+  if (volumes === undefined) {
+    try { volumes = await AD.getKeywordVolumes(wantVol, { fetchImpl: state.fetchAd || state.fetchImpl, env: state.adEnv || process.env }); }
+    catch (e) { console.error('[searchad]', (e && e.message || '').slice(0, 200)); volumes = null; }
+  }
+  keywords.volumes = volumes;
+  if (volumes) {
+    const vol = (k) => (volumes[k] && volumes[k].total != null ? volumes[k].total : null);
+    keywords.diagnosis = keywords.diagnosis.map((d) => ({ ...d, volume: vol(d.keyword) }));
+    keywords.recommendations = keywords.recommendations.map((r) => ({ ...r, volume: vol(r.keyword) }));
+    if (kwLLM && kwLLM.keywords) { kwLLM.keywords = kwLLM.keywords.map((k) => ({ ...k, volume: vol(k.keyword) })).sort((a, b) => (b.volume ?? -1) - (a.volume ?? -1)); }
+  }
+  if (!(cachedKw && cachedDesc && cachedIns && facts.keywords_volume !== undefined)) {
     const pid = v(facts.placeId);
-    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM, description_llm: descLLM, insight_llm: insight ? (insight.llm || null) : null }); } catch { /* 캐시 실패 무시 */ } }
+    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM, keywords_volume: volumes === undefined ? null : volumes, description_llm: descLLM, insight_llm: insight ? (insight.llm || null) : null }); } catch { /* 캐시 실패 무시 */ } }
   }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
