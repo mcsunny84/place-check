@@ -269,7 +269,7 @@
     const volTag = (k) => (k.volume != null ? `<span class="tag${k.volume >= 100 ? ' good' : ''}">월 ${k.volume.toLocaleString('ko-KR')}회</span>` : '');
     const rows = l.keywords.map((k) => `<div class="kw"><span><b>${esc(k.keyword)}</b><br><span class="muted">${esc(k.why)}</span></span>${volTag(k)}</div>`).join('');
     const diag = (l.diagnosis || []).map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.verdict === 'keep' ? 'good' : ''}">${d.verdict === 'keep' ? '유지' : '교체 권장'} · ${esc(d.why)}</span></div>`).join('');
-    const volNote = l.keywords.some((k) => k.volume != null) ? '<p class="muted" style="margin-top:8px">월 검색수는 네이버 검색광고 키워드도구 기준(PC+모바일, 최근 1개월). 100회 미만은 후순위.</p>' : '<p class="muted" style="margin-top:8px">검색량은 아직 몰라요. 아래 검색광고 키워드 도구에서 월 검색수를 확인하고 100 미만은 빼세요.</p>';
+    const volNote = l.keywords.some((k) => k.volume != null) ? '<p class="muted" style="margin-top:8px">월 검색수 = PC+모바일, 최근 1개월. 100회 미만은 후순위.</p>' : '';
     return `<div class="card"><h3 class="sub-h" style="margin-top:0">AI 추천 키워드 — 리뷰·블로그·메뉴 근거</h3>${rows}${diag ? `<h3 class="sub-h">현재 키워드 판정</h3>${diag}` : ''}${volNote}</div>`;
   }
   function renderKeywords(kw) {
@@ -277,7 +277,7 @@
     const diag = kw.diagnosis.map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.labels.includes('좋아요') ? 'good' : ''}">${esc(d.labels.join(' · '))}${vt(d)}</span></div>`).join('') || '<p class="muted">등록된 대표키워드가 없어요.</p>';
     const rec = kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}${vt(r)}</span></div>`).join('') || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
     const llmHtml = renderKeywordsLLM(kw.llm);
-    return `${llmHtml}<div class="grid2" style="margin-top:14px"><div class="card"><h4 class="sub-h" style="margin-top:0">현재 대표키워드</h4>${diag}</div><div class="card" style="margin-top:0"><h4 class="sub-h" style="margin-top:0">규칙 기반 후보 (최대 10)</h4>${rec}</div></div><p class="notice">검색량은 <b>네이버 검색광고 &gt; 키워드 도구</b>에서 확인하세요. 월 검색수 100 미만은 후순위.</p><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p>`;
+    return `${llmHtml}<div class="grid2" style="margin-top:14px"><div class="card"><h4 class="sub-h" style="margin-top:0">현재 대표키워드</h4>${diag}</div><div class="card" style="margin-top:0"><h4 class="sub-h" style="margin-top:0">규칙 기반 후보 (최대 10)</h4>${rec}</div></div><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p>`;
   }
   function renderCoupons(c) {
     if (!c) return '';
