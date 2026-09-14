@@ -129,6 +129,7 @@ async function fetchReviewsPage({ placeId, type, after }) {
   });
   if (res.status === 429) throw new Blocked('429');
   const text = await res.text();
+  if (/보안 확인|자동 입력 방지|captcha/i.test(text) && !text.startsWith('[')) throw new Blocked('captcha'); // GraphQL이 캡차 HTML을 주면 서버 공통 쿨다운
   let j; try { j = JSON.parse(text); } catch { return null; }
   const v = j && j[0] && j[0].data && j[0].data.visitorReviews;
   return v && Array.isArray(v.items) ? v.items : null;

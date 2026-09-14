@@ -15,6 +15,7 @@ const photo = fs.readFileSync(path.join(FX, 'kise-anguk-photo.html'), 'utf8');
 const info = fs.readFileSync(path.join(FX, 'kise-anguk-information.html'), 'utf8');
 const rvis = fs.readFileSync(path.join(FX, 'kise-anguk-review-visitor.html'), 'utf8');
 srv.state.llm = null; srv.state.llmKeywords = null; srv.state.llmDescription = null; // 테스트에서 LLM 호출 금지
+srv.state.adEnv = {}; // 검색광고 키가 .env에 있어도 테스트는 미사용
 
 function resetState({ now = 1_800_000_000_000 } = {}) {
   const s = srv.state;
@@ -206,5 +207,5 @@ test('검색광고 키 있으면 월 검색수 조회·정렬·캐시', async ()
   const r1 = await req(URL1);
   assert.ok(adCalls >= 1); assert.equal(r1.body.keywords.llm.keywords[0].keyword, '안국역 맛집', '검색량 내림차순'); assert.equal(r1.body.keywords.llm.keywords[0].volume, 3900);
   const n = adCalls; const r2 = await req(URL1, '9.9.9.2'); assert.equal(adCalls, n, '캐시'); assert.equal(r2.body.keywords.llm.keywords[0].volume, 3900);
-  srv.state.llmKeywords = null; srv.state.adEnv = undefined; srv.state.fetchAd = undefined;
+  srv.state.llmKeywords = null; srv.state.adEnv = {}; srv.state.fetchAd = undefined;
 });
