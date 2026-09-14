@@ -5,7 +5,8 @@
   "description": "네이버 플레이스 완성도 체크 — 무료 배포용",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "stats": "node stats.js"
   },
   "engines": {
     "node": ">=22"
