@@ -4,118 +4,149 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>플레이스 체크</title>
+<link rel="stylesheet" href="/shared.css">
 <style>
-  :root { --ink:#1b1b1b; --muted:#6b6b6b; --line:#e6e2da; --paper:#fbfaf7; --card:#fff; --ok:#2e7d4f; --warn:#c88a00; --bad:#c0392b; --na:#9a9a9a; --accent:#1f5f8b; }
-  * { box-sizing:border-box; }
-  body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; background:var(--paper); color:var(--ink); line-height:1.5; }
-  header { padding:20px 16px 8px; max-width:720px; margin:0 auto; }
-  h1 { font-size:22px; margin:0 0 4px; }
-  .sub { color:var(--muted); font-size:14px; margin:0; }
-  nav { display:flex; gap:6px; max-width:720px; margin:12px auto 0; padding:0 16px; }
-  nav button { flex:1; padding:10px 6px; border:1px solid var(--line); background:#fff; border-radius:10px; font-size:14px; }
-  nav button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
-  main { max-width:720px; margin:0 auto; padding:12px 16px 60px; }
-  section[hidden] { display:none; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin:10px 0; }
-  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  input[type=text], input[type=number], input[type=date], select, textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:15px; background:#fff; }
-  textarea { min-height:90px; }
-  button.primary { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:12px 18px; font-size:16px; width:100%; }
-  button.ghost { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; }
-  .score { font-size:56px; font-weight:700; line-height:1; }
-  .grade { font-size:28px; font-weight:700; margin-left:8px; }
-  .bar { height:10px; background:#eee; border-radius:6px; overflow:hidden; margin:4px 0 8px; }
-  .bar i { display:block; height:100%; background:var(--accent); }
-  .st { display:inline-block; min-width:52px; text-align:center; font-size:12px; padding:2px 6px; border-radius:6px; color:#fff; }
-  .st.pass{background:var(--ok)} .st.partial{background:var(--warn)} .st.fail{background:var(--bad)} .st.unknown{background:var(--na)} .st.na{background:#ccc;color:#333}
-  .item { border-top:1px solid var(--line); padding:10px 0; }
-  .item:first-child { border-top:0; }
-  .item h4 { margin:0 0 4px; font-size:15px; }
-  .item p { margin:2px 0; font-size:14px; color:#333; }
-  .muted { color:var(--muted); font-size:13px; }
-  .todo { background:#fff8e6; border:1px solid #f1dfae; border-radius:10px; padding:10px 12px; margin:6px 0; }
-  .q { margin:12px 0; }
-  .q label { display:block; font-weight:600; margin-bottom:4px; font-size:15px; }
-  .grp { margin:18px 0 6px; font-size:16px; font-weight:700; }
-  .kw { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid var(--line); font-size:14px; }
-  .kw:first-child{border-top:0}
-  .tag { font-size:12px; color:var(--muted); }
-  .tag.good{color:var(--ok)}
-  pre.draft { white-space:pre-wrap; font-family:inherit; font-size:14px; background:#f6f5f1; padding:12px; border-radius:8px; }
-  .notice { font-size:13px; color:var(--muted); background:#f3f1ec; border-radius:8px; padding:8px 10px; margin:10px 0; }
-  .err { color:var(--bad); font-size:14px; }
-  .spin { display:inline-block; width:14px; height:14px; border:2px solid #ccc; border-top-color:var(--accent); border-radius:50%; animation:s 0.8s linear infinite; vertical-align:middle; }
-  @keyframes s { to { transform:rotate(360deg); } }
-  footer { text-align:center; color:var(--muted); font-size:12px; padding:20px; }
+  /* 이 페이지 전용 — 공용 토큰·컴포넌트는 shared.css */
+  section[hidden] { display: none; }
+  section.res { margin-top: 44px; }
+  .card + .card { margin-top: 14px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 6px; word-break: keep-all; }
+  .err { color: var(--accent-ink); font-size: 15px; font-weight: 700; }
+  .actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+  select.f { width: 100%; background: #fff; color: var(--ink); border: 1px solid var(--line); border-bottom-color: #b9bbb2; padding: 11px 12px; font-size: 15px; font-family: var(--font-sans); outline: none; border-radius: 0; }
+  select.f:focus { border-color: var(--ink); }
+  textarea.f { min-height: 90px; resize: vertical; }
+  .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
+  .chk + .chk { margin-left: 14px; }
+  .date-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .date-row input.f { flex: 1; min-width: 160px; }
+
+  /* 점수 히어로: 큰 숫자 + 등급 (geo.html score-hero 계열) */
+  .score-hero { display: grid; grid-template-columns: 200px 1fr; gap: 28px 36px; align-items: center; }
+  .score-hero .num { display: flex; align-items: baseline; gap: 10px; }
+  .score-hero .num b { font-size: 56px; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .score-hero .num .g { font-size: 28px; font-weight: 800; color: var(--accent); }
+  .score-hero .num-note { color: var(--muted); font-size: 13px; margin-top: 8px; word-break: keep-all; }
+  .grp-row { display: grid; grid-template-columns: 96px 1fr 72px; gap: 8px 14px; align-items: center; padding: 8px 0; }
+  .grp-row + .grp-row { border-top: 1px solid var(--line); }
+  .grp-row .gl { font-size: 14px; font-weight: 700; }
+  .grp-row .sc { text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .grp-row .cc { grid-column: 1 / -1; font-size: 12px; color: var(--faint); margin-top: -4px; }
+
+  /* 할 일·항목 */
+  .todo { border-top: 2px solid var(--accent); padding: 12px 2px 14px; }
+  .todo + .todo { margin-top: 12px; }
+  .todo b { font-size: 15px; }
+  .todo p { font-size: 14px; color: var(--muted); margin-top: 4px; word-break: keep-all; }
+  .item { padding: 12px 2px; }
+  .item + .item { border-top: 1px solid var(--line); }
+  .item h4 { font-size: 15px; font-weight: 700; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .item p { font-size: 14px; margin-top: 4px; word-break: keep-all; }
+  .grp { margin: 22px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+  .grp:first-child { margin-top: 0; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .notice { font-size: 13px; color: var(--muted); background: var(--paper-2); border: 1px solid var(--line); padding: 10px 12px; margin-top: 14px; word-break: keep-all; }
+  .kw { display: flex; justify-content: space-between; gap: 12px; padding: 9px 2px; font-size: 15px; }
+  .kw + .kw { border-top: 1px solid var(--line); }
+  .kw .tag { font-size: 12px; color: var(--muted); text-align: right; flex: none; }
+  .kw .tag.good { color: var(--ok); font-weight: 700; }
+  pre.draft { white-space: pre-wrap; font-family: inherit; font-size: 14px; background: var(--paper-2); border: 1px solid var(--line); padding: 14px 16px; margin: 0 0 12px; }
+  h4.sub-h { font-size: 15px; font-weight: 800; margin: 14px 0 4px; }
+  ol.list { margin: 4px 0 0 18px; padding: 0; font-size: 15px; }
+  ol.list li { margin: 4px 0; word-break: keep-all; }
+  .q { margin: 14px 0 0; }
+  .q:first-child { margin-top: 0; }
+  .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes s { to { transform: rotate(360deg); } }
+  .about p { margin-top: 8px; word-break: keep-all; }
+  .about h3 { font-size: 16px; font-weight: 800; margin-top: 22px; }
+  .about h3:first-child { margin-top: 0; }
+  @media (max-width: 760px) {
+    .score-hero { grid-template-columns: 1fr; gap: 18px; }
+    .grp-row { grid-template-columns: 1fr 64px; }
+    .grp-row .bar { grid-column: 1 / -1; }
+    .actions { justify-content: stretch; }
+    .actions button.go { width: 100%; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>플레이스 체크</h1>
-  <p class="sub">네이버 플레이스, 얼마나 채워져 있나요? 주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지.</p>
-</header>
-<nav>
-  <button class="on" data-tab="auto">자동 진단</button>
-  <button data-tab="self">직접 체크</button>
-  <button data-tab="about">안내</button>
-</nav>
-<main>
+<div class="wrap">
+  <div class="topbar">
+    <a class="logo" href="/">플레이스 <span>체크</span></a>
+    <nav>
+      <a href="#auto" class="active" data-tab="auto">자동 진단</a>
+      <a href="#self" data-tab="self">직접 체크</a>
+      <a href="#about" data-tab="about">안내</a>
+    </nav>
+  </div>
+
   <section id="tab-auto">
-    <div class="card">
-      <label for="url"><b>플레이스 주소</b></label>
-      <input type="text" id="url" placeholder="예) https://m.place.naver.com/restaurant/1234567890/home  또는 naver.me/… 공유 링크">
-      <p class="muted">네이버 지도에서 내 가게 → 공유 → 링크 복사 → 여기 붙여넣기</p>
-      <button class="primary" id="go">검사하기</button>
-      <p id="status" class="muted"></p>
+    <p class="kicker">네이버 플레이스 채움 진단</p>
+    <h1 class="hero">우리 가게 플레이스, <em>얼마나 채워져</em> 있을까?</h1>
+    <p class="sub">주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지. 순위를 예측하는 게 아니라 "채움 정도"를 봅니다.</p>
+
+    <div class="card" style="margin-top: 32px;">
+      <label class="f" for="url">플레이스 주소</label>
+      <input class="f" type="text" id="url" placeholder="예) https://m.place.naver.com/restaurant/1234567890/home  또는 naver.me/… 공유 링크">
+      <p class="hint">네이버 지도에서 내 가게 → 공유 → 링크 복사 → 여기 붙여넣기</p>
+      <div class="actions">
+        <p id="status" class="muted" style="margin-right:auto"></p>
+        <button class="go" id="go">검사하기</button>
+      </div>
     </div>
     <div id="auto-result"></div>
   </section>
 
   <section id="tab-self" hidden>
-    <p class="notice">네이버에서 정보를 못 읽어올 때(또는 직접 하고 싶을 때) 스마트플레이스 관리 화면을 옆에 켜두고 답해 주세요. 답은 서버에 저장되지 않습니다.</p>
-    <form id="self-form"></form>
-    <div class="card">
-      <button class="primary" id="self-go" type="button">점수 보기</button>
-    </div>
+    <p class="kicker">직접 체크</p>
+    <h1 class="hero">스마트플레이스를 <em>옆에 켜두고</em> 답해 주세요.</h1>
+    <p class="sub">네이버에서 정보를 못 읽어올 때(또는 직접 하고 싶을 때) 쓰는 방식입니다. 답은 서버에 저장되지 않습니다.</p>
+
+    <form id="self-form" style="margin-top: 32px;"></form>
+    <div class="actions"><button class="go" id="self-go" type="button">점수 보기</button></div>
     <div id="self-result"></div>
-    <div class="card">
-      <h3 style="margin:0 0 8px">대표키워드 진단·추천</h3>
-      <div class="q"><label>현재 대표키워드 (쉼표로 구분, 최대 5개)</label><input type="text" id="kw-cur" placeholder="안국역 맛집, 돈카츠 …"></div>
-      <div class="row">
-        <div class="q" style="flex:1"><label>동네</label><input type="text" id="kw-district" placeholder="안국동"></div>
-        <div class="q" style="flex:1"><label>가까운 역</label><input type="text" id="kw-station" placeholder="안국역"></div>
+
+    <section class="res">
+      <div class="sec-head"><span class="no">05</span><span class="kr">대표키워드 진단·추천</span><span class="en">Keywords</span></div>
+      <div class="card">
+        <div class="form-grid">
+          <div class="full"><label class="f">현재 대표키워드 (쉼표로 구분, 최대 5개)</label><input class="f" type="text" id="kw-cur" placeholder="안국역 맛집, 돈카츠 …"></div>
+          <div><label class="f">동네</label><input class="f" type="text" id="kw-district" placeholder="안국동"></div>
+          <div><label class="f">가까운 역</label><input class="f" type="text" id="kw-station" placeholder="안국역"></div>
+          <div><label class="f">업종</label><input class="f" type="text" id="kw-cat" placeholder="돈가스"></div>
+          <div><label class="f">대표 메뉴 (쉼표)</label><input class="f" type="text" id="kw-menus" placeholder="로스카츠, 히레카츠"></div>
+          <div class="full"><label class="f">업체명</label><input class="f" type="text" id="kw-name" placeholder="키세카츠 안국역점"></div>
+        </div>
+        <div class="actions"><button class="ghost" id="kw-go" type="button">키워드 진단</button></div>
       </div>
-      <div class="row">
-        <div class="q" style="flex:1"><label>업종</label><input type="text" id="kw-cat" placeholder="돈가스"></div>
-        <div class="q" style="flex:1"><label>대표 메뉴 (쉼표)</label><input type="text" id="kw-menus" placeholder="로스카츠, 히레카츠"></div>
-      </div>
-      <div class="q"><label>업체명</label><input type="text" id="kw-name" placeholder="키세카츠 안국역점"></div>
-      <button class="ghost" id="kw-go" type="button">키워드 진단</button>
       <div id="kw-result"></div>
-    </div>
-    <div class="card">
-      <h3 style="margin:0 0 8px">Q&amp;A식 상세설명 초안</h3>
-      <div class="row">
-        <div class="q" style="flex:1"><label>영업시간 한 줄</label><input type="text" id="d-hours" placeholder="11:00~21:00 (휴게 16~17시)"></div>
-        <div class="q" style="flex:1"><label>휴무</label><input type="text" id="d-closed" placeholder="매주 월요일"></div>
+    </section>
+
+    <section class="res">
+      <div class="sec-head"><span class="no">06</span><span class="kr">Q&amp;A식 상세설명 초안</span><span class="en">Description Draft</span></div>
+      <div class="card">
+        <div class="form-grid">
+          <div><label class="f">영업시간 한 줄</label><input class="f" type="text" id="d-hours" placeholder="11:00~21:00 (휴게 16~17시)"></div>
+          <div><label class="f">휴무</label><input class="f" type="text" id="d-closed" placeholder="매주 월요일"></div>
+          <div><label class="f">주차</label><input class="f" type="text" id="d-parking" placeholder="건물 주차장 1시간 무료"></div>
+          <div><label class="f">예약</label><select class="f" id="d-booking"><option value="">안 받음</option><option value="naver">네이버 예약</option><option value="phone">전화 예약</option></select></div>
+          <div><label class="f">전화</label><input class="f" type="text" id="d-phone" placeholder="0507-…"></div>
+          <div><label class="f">제공 방식</label><div style="display:flex; flex-wrap:wrap; padding-top:8px;"><label class="chk"><input type="checkbox" id="d-takeout"> 포장</label><label class="chk"><input type="checkbox" id="d-delivery"> 배달</label><label class="chk"><input type="checkbox" id="d-group"> 단체</label></div></div>
+          <div class="full"><label class="f">한 줄 자랑 (선택)</label><input class="f" type="text" id="d-brag" placeholder="300시간 숙성한 제주산 돼지고기"></div>
+        </div>
+        <div class="actions"><button class="ghost" id="d-go" type="button">초안 만들기</button></div>
       </div>
-      <div class="row">
-        <div class="q" style="flex:1"><label>주차</label><input type="text" id="d-parking" placeholder="건물 주차장 1시간 무료"></div>
-        <div class="q" style="flex:1"><label>예약</label><select id="d-booking"><option value="">안 받음</option><option value="naver">네이버 예약</option><option value="phone">전화 예약</option></select></div>
-      </div>
-      <div class="row">
-        <div class="q" style="flex:1"><label>전화</label><input type="text" id="d-phone" placeholder="0507-…"></div>
-        <div class="q" style="flex:1"><label><input type="checkbox" id="d-takeout"> 포장 &nbsp; <input type="checkbox" id="d-delivery"> 배달 &nbsp; <input type="checkbox" id="d-group"> 단체</label></div>
-      </div>
-      <div class="q"><label>한 줄 자랑 (선택)</label><input type="text" id="d-brag" placeholder="300시간 숙성한 제주산 돼지고기"></div>
-      <button class="ghost" id="d-go" type="button">초안 만들기</button>
       <div id="d-result"></div>
-    </div>
+    </section>
   </section>
 
   <section id="tab-about" hidden>
-    <div class="card">
-      <h3 style="margin-top:0">이게 뭔가요</h3>
+    <p class="kicker">안내</p>
+    <h1 class="hero">이게 <em>뭔가요</em></h1>
+    <p class="sub">네이버 플레이스 공개 페이지를 읽어서 사장님이 직접 채울 수 있는 항목이 얼마나 채워져 있는지 점수로 보여주는 무료 도구입니다.</p>
+    <div class="card about" style="margin-top: 32px;">
+      <h3>이게 뭔가요</h3>
       <p>네이버 플레이스 공개 페이지를 읽어서 <b>사장님이 직접 채울 수 있는 항목</b>이 얼마나 채워져 있는지 점수로 보여주고, 무엇부터 할지 알려주는 무료 도구입니다.</p>
       <p>순위·매출을 예측하거나 보장하지 않습니다. 점수는 "채움 정도"이지 "노출 정도"가 아닙니다.</p>
       <h3>어떻게 보나요</h3>
@@ -125,8 +156,9 @@
       <p class="muted">만든 사람: 키세카츠·택산가든 운영하는 사장. 문의는 오픈채팅으로.</p>
     </div>
   </section>
-</main>
-<footer>플레이스 체크 v1.0 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</footer>
+
+  <p class="footer-note">플레이스 체크 v1.0 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</p>
+</div>
 
 <script src="/lib/place-scoring.js"></script>
 <script src="/lib/keyword.js"></script>
@@ -140,11 +172,14 @@
   const today = () => { const d = new Date(); const k = new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); return k.toISOString().slice(0,10); };
   const kst = (iso) => { const t = Date.parse(iso); if (!t) return ''; return new Date(t + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ') + ' KST'; };
   const STATE_KO = { pass:'좋아요', partial:'조금 더', fail:'비었어요', unknown:'확인 안 됨', na:'해당 없음' };
+  const STATE_CLS = { pass:'good', partial:'mid', fail:'bad', unknown:'mute', na:'mute' };
   const GROUP_KO = { A:'기본정보', B:'콘텐츠', C:'기능', D:'평판 운영' };
+  const secHead = (no, kr, en) => `<div class="sec-head"><span class="no">${no}</span><span class="kr">${kr}</span><span class="en">${en}</span></div>`;
 
   // ---------- 탭 ----------
-  document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => {
-    document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.topbar nav a').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.querySelectorAll('.topbar nav a').forEach((x) => x.classList.toggle('active', x === b));
     ['auto','self','about'].forEach((t) => { $('#tab-' + t).hidden = t !== b.dataset.tab; });
   }));
 
@@ -172,11 +207,11 @@
   function qHtml(id, prefix) {
     const q = Q[id]; const n = prefix + id;
     let ctl = '';
-    if (q.k === 'sel') ctl = `<select name="${n}"><option value="">선택</option>${q.o.map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select>`;
-    if (q.k === 'num') ctl = `<input type="number" name="${n}" min="0" max="9999" placeholder="숫자">`;
-    if (q.k === 'date') ctl = `<div class="row"><input type="date" name="${n}" style="flex:1"><label style="white-space:nowrap"><input type="checkbox" name="${n}_none"> ${q.none || '없음'}</label></div>`;
-    if (q.k === 'text') ctl = `<textarea name="${n}" placeholder="붙여넣으면 리뷰 강요·효능 단정 같은 표현을 찾아드려요"></textarea>`;
-    return `<div class="q" data-id="${id}"><label>${id} · ${esc(q.t)}</label>${ctl}</div>`;
+    if (q.k === 'sel') ctl = `<select class="f" name="${n}"><option value="">선택</option>${q.o.map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select>`;
+    if (q.k === 'num') ctl = `<input class="f" type="number" name="${n}" min="0" max="9999" placeholder="숫자">`;
+    if (q.k === 'date') ctl = `<div class="date-row"><input class="f" type="date" name="${n}"><label class="chk"><input type="checkbox" name="${n}_none"> ${q.none || '없음'}</label></div>`;
+    if (q.k === 'text') ctl = `<textarea class="f" name="${n}" placeholder="붙여넣으면 리뷰 강요·효능 단정 같은 표현을 찾아드려요"></textarea>`;
+    return `<div class="q${q.k === 'text' ? ' full' : ''}" data-id="${id}"><label class="f">${id} · ${esc(q.t)}</label>${ctl}</div>`;
   }
   function readAnswers(form, prefix) {
     const a = {};
@@ -191,7 +226,7 @@
 
   // 셀프 폼 렌더
   (function(){ const f = $('#self-form'); let html = '';
-    for (const g of ['A','B','C','D']) { html += `<div class="grp">${GROUP_KO[g]}</div><div class="card">` + S.ITEMS.filter((i) => i.group === g).map((i) => qHtml(i.id, 'self_')).join('') + '</div>'; }
+    for (const g of ['A','B','C','D']) { html += `<div class="grp">${GROUP_KO[g]}</div><div class="card"><div class="form-grid">` + S.ITEMS.filter((i) => i.group === g).map((i) => qHtml(i.id, 'self_')).join('') + '</div></div>'; }
     f.innerHTML = html; })();
 
   // ---------- 결과 렌더 ----------
@@ -200,55 +235,60 @@
     const knownW = Object.values(r.groups).reduce((a, x) => a + x.known, 0);
     const unkW = Object.values(r.groups).reduce((a, x) => a + (x.applicable - x.known), 0);
     const head = r.display === 'insufficient'
-      ? `<div class="score">—</div><p class="muted">답변이 부족해요. 몇 가지만 더 답하면 점수가 나와요.</p>`
+      ? `<div><div class="num"><b>—</b></div><p class="num-note">답변이 부족해요. 몇 가지만 더 답하면 점수가 나와요.</p></div>`
       : r.display === 'grade'
-        ? `<div class="score">${r.grade}</div><p class="muted">확인된 항목이 ${Math.round(r.coverage*100)}%뿐이라 등급만 표시해요. 아래 질문에 답하면 점수가 나와요.</p>`
-        : `<div><span class="score">${r.score}</span><span class="grade">${r.grade}</span></div><p class="muted">확인된 항목 ${knownW}점 기준 (100점 환산) · 확인 안 된 ${unkW}점은 계산에서 뺐어요</p>`;
+        ? `<div><div class="num"><b>${r.grade}</b></div><p class="num-note">확인된 항목이 ${Math.round(r.coverage*100)}%뿐이라 등급만 표시해요. 아래 질문에 답하면 점수가 나와요.</p></div>`
+        : `<div><div class="num"><b>${r.score}</b><span class="g">${r.grade}</span></div><p class="num-note">확인된 항목 ${knownW}점 기준 (100점 환산) · 확인 안 된 ${unkW}점은 계산에서 뺐어요</p></div>`;
     let bars = '';
-    for (const g of ['A','B','C','D']) { const x = r.groups[g]; const unk = x.applicable - x.known; const pct = x.known ? Math.round(100 * x.earned / x.known) : 0;
-      bars += `<div><span style="font-size:13px">${GROUP_KO[g]} ${x.earned}/${x.known}${unk ? ` <span class="muted">(확인 안 됨 ${unk}점 제외)</span>` : ''}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`; }
-    let todoHtml = todos.length ? todos.map((id, i) => `<div class="todo"><b>${i+1}. ${esc(labelOf(id))}</b><p style="margin:4px 0 0;font-size:14px">${esc(COPY[id].how)}</p></div>`).join('') : '<p class="muted">채울 항목이 없어요. 훌륭해요.</p>';
+    for (const g of ['A','B','C','D']) { const x = r.groups[g]; const unk = x.applicable - x.known; const p = x.known ? (x.earned / x.known).toFixed(2) : 0;
+      bars += `<div class="grp-row"><span class="gl">${GROUP_KO[g]}</span><div class="bar"><i style="--p:${p}"></i></div><span class="sc">${x.earned}/${x.known}</span>${unk ? `<span class="cc">확인 안 됨 ${unk}점 제외</span>` : ''}</div>`; }
+    let todoHtml = todos.length ? todos.map((id, i) => `<div class="todo"><b>${i+1}. ${esc(labelOf(id))}</b><p>${esc(COPY[id].how)}</p></div>`).join('') : '<p class="muted">채울 항목이 없어요. 훌륭해요.</p>';
     let items = '';
     for (const g of ['A','B','C','D']) { items += `<div class="grp">${GROUP_KO[g]}</div><div class="card">`;
       for (const it of r.items.filter((i) => S.ITEMS.find((x) => x.id === i.id).group === g)) {
-        const src = auto && auto[it.id] ? `<span class="muted"> · ${auto[it.id].source === 'manual' ? '직접 답' : '자동'}</span>` : '';
-        items += `<div class="item"><h4><span class="st ${it.state}">${STATE_KO[it.state]}</span> ${esc(labelOf(it.id))} <span class="muted">(${it.weight}점)</span>${src}</h4>`;
+        const src = auto && auto[it.id] ? `<span class="muted">· ${auto[it.id].source === 'manual' ? '직접 답' : '자동'}</span>` : '';
+        items += `<div class="item"><h4><span class="badge ${STATE_CLS[it.state]}">${STATE_KO[it.state]}</span> ${esc(labelOf(it.id))} <span class="muted">(${it.weight}점)</span>${src}</h4>`;
         if (it.state !== 'pass' && it.state !== 'na') items += `<p>${esc(COPY[it.id].why)}</p><p class="muted">${esc(COPY[it.id].how)}</p>`;
         items += '</div>';
       } items += '</div>'; }
     const unk = r.items.filter((i) => i.state === 'unknown').length;
     const unkNote = unk ? `<p class="notice">"확인 안 됨" ${unk}개는 네이버 페이지에서 자동으로 읽지 못한 항목이에요. 감점 없이 계산에서 뺐고, 아래 질문에 답하면 점수에 반영돼요.</p>` : '';
-    return `<div class="card">${head}${bars}${unkNote}</div><div class="grp">이번 주 할 일</div>${todoHtml}${items}`;
+    return `<section class="res">${secHead('01', '점수 요약', 'Score')}<div class="card"><div class="score-hero">${head}<div>${bars}</div></div>${unkNote}</div></section>`
+      + `<section class="res">${secHead('02', '이번 주 할 일', 'This Week')}<div class="card">${todoHtml}</div></section>`
+      + `<section class="res">${secHead('03', '항목별 진단', 'Items')}${items}</section>`;
   }
   const labelOf = (id) => (S.ITEMS.find((x) => x.id === id) || {}).label || id;
 
   function renderKeywords(kw) {
     const diag = kw.diagnosis.map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.labels.includes('좋아요') ? 'good' : ''}">${esc(d.labels.join(' · '))}</span></div>`).join('') || '<p class="muted">등록된 대표키워드가 없어요.</p>';
     const rec = kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}</span></div>`).join('') || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
-    return `<div class="card"><h3 style="margin:0 0 6px">현재 대표키워드</h3>${diag}</div><div class="card"><h3 style="margin:0 0 6px">추천 키워드 (최대 10)</h3>${rec}<p class="notice">검색량은 <b>네이버 검색광고 &gt; 키워드 도구</b>에서 확인하세요. 월 검색수 100 미만은 후순위.</p><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p></div>`;
+    return `<div class="grid2" style="margin-top:14px"><div class="card"><h4 class="sub-h" style="margin-top:0">현재 대표키워드</h4>${diag}</div><div class="card" style="margin-top:0"><h4 class="sub-h" style="margin-top:0">추천 키워드 (최대 10)</h4>${rec}</div></div><p class="notice">검색량은 <b>네이버 검색광고 &gt; 키워드 도구</b>에서 확인하세요. 월 검색수 100 미만은 후순위.</p><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p>`;
   }
   function renderInsight(ins) {
     if (!ins) return '';
-    const li = (arr, f) => arr.length ? '<ol style="margin:4px 0 0 18px;padding:0">' + arr.map((x) => `<li style="margin:4px 0">${f(x)}</li>`).join('') + '</ol>' : '<p class="muted">자료가 부족해요.</p>';
+    const li = (arr, f) => arr.length ? '<ol class="list">' + arr.map((x) => `<li>${f(x)}</li>`).join('') + '</ol>' : '<p class="muted">자료가 부족해요.</p>';
     const st = ins.stats || {};
-    let html = `<div class="card"><h3 style="margin:0 0 4px">리뷰로 본 우리 가게</h3><p class="muted" style="margin:0 0 8px">방문자 리뷰 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점 · 최근 ${st.recent ?? 0}건 중 답글 ${st.recentWithReply ?? 0}건</p>`;
+    let html = `<section class="res">${secHead('04', '리뷰로 본 우리 가게', 'Reviews')}<div class="card"><p class="muted">방문자 리뷰 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점 · 최근 ${st.recent ?? 0}건 중 답글 ${st.recentWithReply ?? 0}건</p>`;
     if (ins.llm) {
-      html += `<h4 style="margin:10px 0 2px">손님이 꼽은 장점</h4>${li(ins.llm.strengths, esc)}<h4 style="margin:12px 0 2px">보완하면 좋을 점</h4>${li(ins.llm.improvements, esc)}<p class="muted" style="margin-top:8px">최근 리뷰 본문을 AI가 읽고 정리한 내용이에요. 아래 숫자는 네이버 리뷰 통계 그대로.</p>`;
+      html += `<h4 class="sub-h">손님이 꼽은 장점</h4>${li(ins.llm.strengths, esc)}<h4 class="sub-h">보완하면 좋을 점</h4>${li(ins.llm.improvements, esc)}<p class="muted" style="margin-top:8px">최근 리뷰 본문을 AI가 읽고 정리한 내용이에요. 아래 숫자는 네이버 리뷰 통계 그대로.</p>`;
     }
-    html += `<h4 style="margin:12px 0 2px">${ins.llm ? '투표 키워드 상위 5' : '손님이 꼽은 장점 (투표 키워드 상위 5)'}</h4>${li(ins.strengths, (s) => `${esc(s.text)} <span class="muted">${s.count}표${s.share != null ? ' · ' + s.share + '%' : ''}</span>`)}`;
-    if (!ins.llm) html += `<h4 style="margin:12px 0 2px">보완하면 좋을 점</h4>${li(ins.improvements, (i) => esc(i.text))}`;
+    html += `<h4 class="sub-h">${ins.llm ? '투표 키워드 상위 5' : '손님이 꼽은 장점 (투표 키워드 상위 5)'}</h4>${li(ins.strengths, (s) => `${esc(s.text)} <span class="muted">${s.count}표${s.share != null ? ' · ' + s.share + '%' : ''}</span>`)}`;
+    if (!ins.llm) html += `<h4 class="sub-h">보완하면 좋을 점</h4>${li(ins.improvements, (i) => esc(i.text))}`;
     if (st.themes && st.themes.length) html += `<p class="muted" style="margin-top:10px">리뷰에서 많이 언급된 주제: ${st.themes.map((t) => esc(t.name) + ' ' + t.count).join(' · ')}</p>`;
-    return html + '</div>';
+    return html + '</div></section>';
   }
   function renderDraft(text) {
-    return `<div class="card"><h3 style="margin:0 0 6px">Q&amp;A식 상세설명 초안</h3><pre class="draft" id="draft-text">${esc(text)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
+    return `<div class="card" style="margin-top:14px"><pre class="draft" id="draft-text">${esc(text)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
   }
+  // 자동 진단 결과에서만 쓰는 섹션 래퍼 — 직접 체크 탭은 정적 sec-head가 이미 있다
+  const kwSection = (kw) => `<section class="res">${secHead('05', '대표키워드', 'Keywords')}${renderKeywords(kw)}</section>`;
+  const draftSection = (text) => `<section class="res">${secHead('06', '상세설명 초안', 'Description Draft')}${renderDraft(text)}</section>`;
 
   // ---------- 자동 진단 ----------
   let last = null;
   async function runCheck(refresh) {
     const url = $('#url').value.trim(); if (!url) return;
-    $('#status').innerHTML = '<span class="spin"></span> 네이버에서 정보를 읽는 중… (최대 90초)';
+    $('#status').innerHTML = '<span class="spin"></span>네이버에서 정보를 읽는 중… (최대 90초)';
     $('#auto-result').innerHTML = '';
     let data;
     try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh }) }); data = await res.json(); }
@@ -256,7 +296,7 @@
     $('#status').textContent = '';
     if (data.mode !== 'auto') {
       const R = { no_url:'주소를 찾지 못했어요. 링크를 다시 확인해 주세요.', unsupported:'지원하지 않는 주소 형식이에요. 네이버 지도의 가게 페이지 링크를 붙여넣어 주세요.', cooldown:'지금은 네이버에서 정보를 읽어올 수 없어요(잠시 차단). 아래 "직접 체크"로 진행해 주세요.', busy:'지금 대기가 많아요. 잠시 후 다시 시도하거나 "직접 체크"로 진행해 주세요.', timeout:'시간이 오래 걸려요. 잠시 후 다시 시도해 주세요.', unreadable:'이 페이지에서 정보를 읽지 못했어요. "직접 체크"로 진행해 주세요.', ip_limit:'너무 자주 요청했어요. 1분 뒤 다시.', unsupported_url:'공유 링크가 가게 페이지로 연결되지 않아요.' };
-      $('#auto-result').innerHTML = `<div class="card"><p class="err">${esc(R[data.reason] || ('실패: ' + data.reason))}</p><button class="ghost" onclick="document.querySelector('nav button[data-tab=self]').click()">직접 체크로 가기</button></div>`;
+      $('#auto-result').innerHTML = `<div class="card" style="margin-top:14px"><p class="err">${esc(R[data.reason] || ('실패: ' + data.reason))}</p><div class="actions" style="justify-content:flex-start"><button class="ghost" onclick="document.querySelector('.topbar nav a[data-tab=self]').click()">직접 체크로 가기</button></div></div>`;
       return;
     }
     last = data;
@@ -265,19 +305,22 @@
   $('#go').addEventListener('click', () => runCheck(false));
   function refreshBtn(d) {
     const age = (Date.now() - Date.parse(d.place.fetched_at || 0)) / 60000;
-    if (age < 10) return `<p class="muted" style="margin:6px 0 0">수정 후 다시 검사하려면 ${Math.ceil(10 - age)}분 뒤 "다시 읽어오기"를 누르세요.${d.cache && d.cache.refresh_denied ? ' (방금 읽은 자료를 다시 보여드렸어요)' : ''}</p>`;
-    return `<button class="ghost" id="refresh" style="margin-top:8px">네이버에서 다시 읽어오기</button><span class="muted"> 수정한 뒤 반영 확인용</span>`;
+    if (age < 10) return `<p class="muted" style="margin-top:10px">수정 후 다시 검사하려면 ${Math.ceil(10 - age)}분 뒤 "다시 읽어오기"를 누르세요.${d.cache && d.cache.refresh_denied ? ' (방금 읽은 자료를 다시 보여드렸어요)' : ''}</p>`;
+    return `<div class="actions" style="justify-content:flex-start"><button class="ghost" id="refresh">네이버에서 다시 읽어오기</button><span class="muted">수정한 뒤 반영 확인용</span></div>`;
+  }
+  function placeCard(p, note) {
+    return `<div class="card" style="margin-top:14px"><div class="kv"><span class="k">업체</span><span><b>${esc(p.name)}</b></span><span class="k">분류·주소</span><span>${esc(p.category || '')} · ${esc(p.address || '')}</span>${note}</div>`;
   }
   function renderAuto() {
     const d = last; const p = d.place;
-    let html = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">${esc(p.category || '')} · ${esc(p.address || '')}</span><p class="muted" style="margin:4px 0 0">읽은 시각 ${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</p>${refreshBtn(d)}</div>`;
+    let html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`);
     html += renderScore(d.result, d.todos, d.auto);
     if (d.supplement && d.supplement.length) {
-      html += `<div class="grp">자동으로 못 읽은 것 — 답하면 더 정확해져요</div><form id="sup-form"><div class="card">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}<button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`;
+      html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
     }
     html += renderInsight(d.insight);
-    html += renderKeywords(d.keywords);
-    html += renderDraft(d.draft);
+    html += kwSection(d.keywords);
+    html += draftSection(d.draft);
     $('#auto-result').innerHTML = html;
     const rb = $('#refresh'); if (rb) rb.addEventListener('click', () => runCheck(true), { once: true });
     bindSup(d, {});
@@ -291,7 +334,7 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">보충 답변 반영</span></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderInsight(d.insight) + renderKeywords(d.keywords) + renderDraft(d.draft);
+      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span></div></div>`) + renderScore(result, S.pickTodos(result), auto) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d.draft);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
     }, { once: true });

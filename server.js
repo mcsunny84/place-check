@@ -32,7 +32,11 @@ const COOLDOWN_MS = 30 * 60 * 1000;
 const IP_LIMIT = 3; // 새 수집 작업 / 60초
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const TABS = ['review/visitor', 'feed']; // 홈에 상세설명·사진 수·찾아오는 길까지 있어(07번) 정보·사진 탭 불필요
-const BUDGET = 5; // 홈 + 탭 2 + 재시도·단축 URL 여유 2
+const BUDGET = 9; // 홈 + 탭 2 + 리뷰 GraphQL 최대 4페이지 + 재시도·단축 URL 여유 2
+const REVIEW_DAYS = 180;       // 리뷰 수집 창(최근 6개월)
+const REVIEW_PAGES_MAX = 4;    // 50건 × 4 = 최대 200건
+const GQL_URL = 'https://pcmap-api.place.naver.com/graphql';
+const GQL_REVIEWS = 'query getVisitorReviews($input: VisitorReviewsInput) { visitorReviews(input: $input) { total items { id rating body visited created cursor reply { body created } votedKeywords { name } visitCategories { keywords { name } } } } }';
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
@@ -105,6 +109,49 @@ async function fetchText(url) {
   return { status: res.status, text, url: res.url };
 }
 
+// pcmap 내부 GraphQL(방문자 리뷰 페이지네이션, 07번 4차 실측: size≤50, after=마지막 cursor)
+async function fetchReviewsPage({ placeId, type, after }) {
+  await gapWait();
+  const input = { businessId: placeId, businessType: type, item: '0', size: 50, includeContent: true, getReactions: false, getTrailer: false, getUserStats: false, includeReceiptPhotos: false, isPhotoUsed: false, cidList: [] };
+  if (after) input.after = after;
+  const res = await state.fetchImpl(GQL_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': UA, 'accept-language': 'ko-KR,ko;q=0.9', referer: `https://pcmap.place.naver.com/${type}/${placeId}/review/visitor`, origin: 'https://pcmap.place.naver.com' },
+    body: JSON.stringify([{ operationName: 'getVisitorReviews', variables: { input }, query: GQL_REVIEWS }]),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (res.status === 429) throw new Blocked('429');
+  const text = await res.text();
+  let j; try { j = JSON.parse(text); } catch { return null; }
+  const v = j && j[0] && j[0].data && j[0].data.visitorReviews;
+  return v && Array.isArray(v.items) ? v.items : null;
+}
+
+// 최근 REVIEW_DAYS일 리뷰를 커서로 모은다. 예산 내에서만, 실패는 조용히 중단(SSR 20건이 폴백).
+async function collectReviews(job, placeId, type, facts, budgetRef) {
+  const now = new Date(state.now());
+  const cutoff = new Date(now.getTime() - REVIEW_DAYS * 86400000).toISOString().slice(0, 10);
+  const all = [];
+  let after = null;
+  for (let page = 0; page < REVIEW_PAGES_MAX && budgetRef.n > 0; page++) {
+    budgetRef.n -= 1;
+    let items;
+    try { items = await fetchReviewsPage({ placeId, type, after }); }
+    catch (e) { if (e instanceof Blocked) throw e; break; }
+    if (!items || !items.length) break;
+    const norm = items.map((it) => P.normalizeReview(it, now)).filter(Boolean);
+    all.push(...norm);
+    const oldest = norm.map((r) => r.visited || r.created).filter(Boolean).sort()[0];
+    after = norm[norm.length - 1].cursor;
+    if (!after || (oldest && oldest < cutoff) || items.length < 50) break;
+  }
+  if (!all.length) return facts;
+  const ssr = facts.reviews && facts.reviews.status === 'value' ? facts.reviews.value : [];
+  const merged = P.dedupeReviews([...all, ...ssr]).filter((r) => { const d = r.visited || r.created; return !d || d >= cutoff; });
+  merged.sort((a, b) => String(b.visited || b.created || '').localeCompare(String(a.visited || a.created || '')));
+  return { ...facts, reviews: { status: 'value', value: merged }, reviewWindow: { status: 'value', value: { days: REVIEW_DAYS, from: cutoff, fetched: all.length, complete: all.length < REVIEW_PAGES_MAX * 50 } } };
+}
+
 // ---------- 작업 실행 ----------
 async function collect(job) {
   let budget = BUDGET;
@@ -142,6 +189,8 @@ async function collect(job) {
       // 비차단 실패 → 해당 필드 missing 유지
     }
   }
+  const budgetRef = { n: budget };
+  try { facts = await collectReviews(job, placeId, type, facts, budgetRef); } catch (e) { if (e instanceof Blocked) throw e; }
   writeCache(placeId, facts);
   return { facts, placeId };
 }

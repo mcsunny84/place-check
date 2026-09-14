@@ -1,0 +1,166 @@
+/* 플레이스 체크 — marketing-lab/public/shared.css의 "라이트 에디토리얼" 토큰·컴포넌트 발췌.
+   종이 오프화이트 + 먹색 잉크 + 버밀리언 레드 원포인트, 헤어라인 룰, 각진 모서리. GEO 전용 패널(nv-/trend-/eo-/lane-/sum-/conflict-)은 뺐다. */
+:root {
+  --paper: #fafaf8;
+  --paper-2: #f3f3ef;
+  --ink: #1b1d21;
+  --muted: #666b73;
+  --faint: #9aa0a8;
+  --line: #dcddd7;
+  --rule: #1b1d21;
+  --accent: #c2371f;
+  --accent-ink: #a12d18;
+  --ok: #2e6e3e;
+  --warn: #a06a12;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --font-serif: "Nanum Myeongjo", "Noto Serif KR", Batang, "Apple Myungjo", serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.65;
+  min-height: 100vh;
+  font-size: 15px;
+}
+a { color: inherit; text-decoration: none; }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px 96px; }
+
+/* 마스트헤드: 신문/보고서 상단부 */
+.topbar {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 22px 0 14px;
+  border-bottom: 2px solid var(--rule);
+  margin-bottom: 44px;
+}
+.topbar .logo { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; white-space: nowrap; }
+.topbar .logo span { color: var(--accent); }
+.topbar nav { display: flex; gap: 22px; font-size: 13px; color: var(--muted); }
+/* 제호·탭 레이블은 어떤 폭에서도 접지 않는다 — 접히면 글자 단위로 쪼개져 마스트헤드가 무너진다. */
+.topbar nav a { white-space: nowrap; }
+.topbar nav a:hover { color: var(--ink); }
+.topbar nav a.active { color: var(--ink); font-weight: 700; border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+
+/* 페이지 도입부 */
+.kicker { font-size: 13px; color: var(--accent); font-weight: 700; margin-bottom: 10px; }
+h1.hero { font-size: 38px; line-height: 1.32; font-weight: 800; letter-spacing: -0.035em; word-break: keep-all; }
+h1.hero em { font-style: normal; color: var(--accent); }
+.sub { color: var(--muted); margin-top: 12px; font-size: 16px; max-width: 60ch; word-break: keep-all; }
+
+/* 패널: 모서리 각지게, 선으로만 구분 */
+.card { background: #fff; border: 1px solid var(--line); padding: 26px 28px; }
+
+/* 문서형 섹션 헤딩: 번호 + 한글 제목 + 얇은 룰 (사내 문서 관례) */
+.sec-head {
+  display: flex; align-items: baseline; gap: 12px;
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 10px; margin-bottom: 18px;
+}
+.sec-head .no { font-size: 13px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.sec-head .kr { font-size: 21px; font-weight: 800; letter-spacing: -0.02em; }
+.sec-head .en { margin-left: auto; font-size: 12px; color: var(--faint); }
+/* F5(IMPL-001 부분): 해석 섹션(AI 답변 관측·실행 로드맵) 헤더에 붙는 방법론 부기 —
+   본문 내용이 사실 단정이 아니라 관측 표본 기준 해석임을 헤더에서부터 명시한다. */
+.sec-head .method { font-size: 11px; color: var(--faint); font-style: italic; }
+
+/* 입력 폼 */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 20px; }
+.form-grid .full { grid-column: 1 / -1; }
+label.f { display: block; font-size: 13px; color: var(--ink); font-weight: 700; margin-bottom: 6px; }
+input.f, textarea.f {
+  width: 100%; background: #fff; color: var(--ink); border: 1px solid var(--line);
+  border-bottom-color: #b9bbb2;
+  padding: 11px 12px; font-size: 15px; font-family: var(--font-sans); outline: none; border-radius: 0;
+}
+input.f:focus, textarea.f:focus { border-color: var(--ink); }
+input.f::placeholder, textarea.f::placeholder { color: var(--faint); }
+button.go {
+  background: var(--ink); color: #fff; font-weight: 700; font-size: 15px;
+  border: 0; border-radius: 0; padding: 13px 30px; cursor: pointer; font-family: var(--font-sans);
+}
+button.go:hover { background: #000; }
+button.go:active { transform: translateY(1px); }
+button.go:disabled { opacity: 0.4; cursor: default; }
+button.ghost {
+  background: transparent; color: var(--ink); border: 1px solid var(--line);
+  border-radius: 0; padding: 9px 16px; font-size: 13px; cursor: pointer; font-family: var(--font-sans);
+}
+button.ghost:hover { border-color: var(--ink); }
+button.ghost:active { transform: translateY(1px); }
+
+/* 파이프라인 진행: 번호 붙은 체크리스트 */
+.stages { display: grid; }
+.stage { display: flex; align-items: flex-start; gap: 16px; padding: 15px 4px; }
+.stage + .stage { border-top: 1px solid var(--line); }
+.stage .dot {
+  width: 30px; flex: none; font-size: 14px; font-weight: 800;
+  color: var(--faint); font-variant-numeric: tabular-nums; padding-top: 1px;
+}
+.stage.running .dot { color: var(--accent); }
+.stage.done .dot { color: var(--ink); }
+.stage .st-label { font-weight: 700; font-size: 15px; }
+.stage.running .st-label::after { content: " 진행 중"; color: var(--accent); font-size: 13px; }
+.stage.done .st-label::after { content: " 완료"; color: var(--muted); font-size: 13px; font-weight: 400; }
+.stage .st-desc { color: var(--muted); font-size: 13px; }
+
+.livelog {
+  margin-top: 20px; background: var(--paper-2); border: 1px solid var(--line);
+  padding: 14px 16px; font-size: 13px; color: var(--muted); max-height: 200px; overflow-y: auto;
+}
+.livelog .ll { display: flex; gap: 10px; padding: 2px 0; }
+.livelog .ll .tag { color: var(--accent); flex: none; font-weight: 700; }
+.elapsed { color: var(--muted); font-size: 13px; margin-top: 14px; text-align: center; }
+
+/* 결과 공통 */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 8px 18px; font-size: 15px; }
+.kv .k { color: var(--muted); }
+
+/* 판정 태그: 각진 텍스트 라벨 (의미 상태에만 사용) */
+.badge {
+  display: inline-block; font-size: 12px; font-weight: 700;
+  border: 1px solid currentColor; border-radius: 0; padding: 2px 9px; line-height: 1.5;
+}
+.badge.good { color: var(--ok); }
+.badge.mid { color: var(--warn); }
+.badge.bad { color: var(--accent-ink); }
+.badge.accent { color: var(--accent-ink); }
+
+.bar { height: 6px; background: var(--paper-2); border: 1px solid var(--line); }
+.bar > i { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: left; transform: scaleX(var(--p, 0)); transition: transform 0.6s ease; }
+@media (prefers-reduced-motion: reduce) { .bar > i { transition: none; } }
+/* 미확인·해당 없음 등 중립 상태 */
+.badge.mute { color: var(--muted); }
+.hide { display: none !important; }
+
+.footer-note { color: var(--faint); font-size: 12px; text-align: center; margin-top: 56px; }
+
+@media (max-width: 760px) {
+  .form-grid, .grid2, .grid3 { grid-template-columns: 1fr; }
+  h1.hero { font-size: 27px; }
+  .card { padding: 20px 18px; }
+  .wrap { padding: 0 18px 64px; }
+
+  /* 마스트헤드: 좁은 화면에서는 신문 1면처럼 제호를 위, 섹션 탭을 그 아래 줄로 내린다.
+     한 줄에 밀어넣으면 제호와 탭이 서로를 눌러 글자 단위로 접힌다(모바일 실측 2026-08-28).
+     탭 줄은 접지 않고 가로로 흘려보낸다 — 항목이 늘어도 마스트헤드 높이가 자라지 않는다. */
+  .topbar {
+    flex-direction: column; align-items: stretch; gap: 12px;
+    padding: 18px 0 0; margin-bottom: 28px;
+  }
+  .topbar nav {
+    gap: 20px; overflow-x: auto; scrollbar-width: none;
+    padding-bottom: 10px; margin-bottom: -2px;
+  }
+  .topbar nav::-webkit-scrollbar { display: none; }
+  .topbar nav a { padding: 3px 0; }
+  .topbar nav a.active { padding-bottom: 5px; }
+}
+@media print {
+  body { background: #fff; }
+  .topbar nav, .no-print { display: none !important; }
+  .card { border-color: #bbb; }
+}
