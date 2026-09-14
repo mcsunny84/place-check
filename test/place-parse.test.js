@@ -171,3 +171,11 @@ test('synthetic: absent keys → missing, only placeDetail-referenced Menu/Subwa
   state.ROOT_QUERY['placeDetail({"input":{"id":"1"}})'].menus = [];
   assert.strictEqual(parseHome(wrap(state)).menus.status, 'empty');
 });
+
+test('parseFeed: feeds 키 없음 + 홈 hasFeed=false → 소식 0건 확정(empty, complete)', () => {
+  const P2 = require('../lib/place-parse');
+  const f = P2.parseFeed('<html><script>window.__APOLLO_STATE__={"ROOT_QUERY":{"__typename":"Query"}}</script></html>', { hasFeed: { status: 'value', value: false } });
+  assert.equal(f.feeds.status, 'empty'); assert.deepEqual(f.feedsComplete, { status: 'value', value: true });
+  const g = P2.parseFeed('<html><script>window.__APOLLO_STATE__={"ROOT_QUERY":{"__typename":"Query"}}</script></html>', { hasFeed: { status: 'value', value: true } });
+  assert.equal(g.feeds.status, 'missing');
+});

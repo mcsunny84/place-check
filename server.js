@@ -337,7 +337,7 @@ async function buildResponse(facts, asOf, queuedPosition) {
   }
   // 월 검색수(네이버 검색광고 키워드도구) — 라이선스 3종이 .env에 있을 때만. 현재+AI+규칙 상위 후보 한 번에, 매장당 1회 캐시.
   let volumes = facts.keywords_volume !== undefined ? facts.keywords_volume : undefined;
-  const wantVol = [...existing, ...((kwLLM && kwLLM.keywords) || []).map((k) => k.keyword), ...keywords.recommendations.slice(0, 5).map((r) => r.keyword)];
+  const wantVol = [...existing, ...((kwLLM && kwLLM.keywords) || []).map((k) => k.keyword), ...keywords.recommendations.map((r) => r.keyword)];
   if (volumes === undefined) {
     try { volumes = await AD.getKeywordVolumes(wantVol, { fetchImpl: state.fetchAd || state.fetchImpl, env: state.adEnv || process.env }); }
     catch (e) { console.error('[searchad]', (e && e.message || '').slice(0, 200)); volumes = null; }

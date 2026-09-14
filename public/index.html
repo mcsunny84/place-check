@@ -257,7 +257,7 @@
         items += '</div>';
       } items += '</div>'; }
     const unk = r.items.filter((i) => i.state === 'unknown').length;
-    const unkNote = unk ? `<p class="notice">"확인 안 됨" ${unk}개는 네이버 페이지에서 자동으로 읽지 못한 항목이에요. 감점 없이 계산에서 뺐고, 아래 질문에 답하면 점수에 반영돼요.</p>` : '';
+    const unkNote = unk ? `<p class="notice">${auto ? `"확인 안 됨" ${unk}개는 네이버 페이지에서 자동으로 읽지 못한 항목이에요. 감점 없이 계산에서 뺐고, 아래 질문에 답하면 점수에 반영돼요.` : `"확인 안 됨" ${unk}개는 아직 답하지 않은 항목이에요. 감점 없이 계산에서 뺐고, 위에서 답하면 점수에 반영돼요.`}</p>` : '';
     return `<section class="res">${secHead('01', '점수 요약', 'Score')}<div class="card"><div class="score-hero">${head}<div>${bars}</div></div>${unkNote}</div></section>`
       + `<section class="res">${secHead('02', '이번 주 할 일', 'This Week')}<div class="card">${todoHtml}</div></section>`
       + `<section class="res">${secHead('03', '항목별 진단', 'Items')}${items}</section>`;
