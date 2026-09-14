@@ -31,8 +31,8 @@ const QUEUE_MAX = 200;
 const COOLDOWN_MS = 30 * 60 * 1000;
 const IP_LIMIT = 3; // 새 수집 작업 / 60초
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const TABS = ['review/visitor', 'information', 'feed', 'photo']; // 홈 다음 우선순위(06 §3 + 리뷰 탭 추가)
-const BUDGET = 6; // 홈 + 탭 4 + 재시도 여유 1 (단축 URL 해석 시 photo 생략)
+const TABS = ['review/visitor', 'feed']; // 홈에 상세설명·사진 수·찾아오는 길까지 있어(07번) 정보·사진 탭 불필요
+const BUDGET = 5; // 홈 + 탭 2 + 재시도·단축 URL 여유 2
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 

@@ -52,8 +52,12 @@ test('parseHome kise-anguk', () => {
   assert.strictEqual(val(f.visitorReviewsTotal), 1426);
   assert.strictEqual(val(f.visitorReviewsScore), 4.83);
   assert.strictEqual(val(f.blogReviewsTotal), 196);
-  assert.strictEqual(f.description.status, 'missing');
-  for (const k of ['feeds', 'feedsComplete', 'totalImages', 'topPhotosTotal', 'latestVisitorReviewDate', 'latestOwnerReplyDate']) {
+  assert.strictEqual(f.description.status, 'value');
+  assert.ok(f.description.value.length > 100);
+  assert.strictEqual(val(f.totalImages), 23);
+  assert.ok(val(f.road).includes('4번 출구'));
+  assert.strictEqual(val(f.phonePrivate), false);
+  for (const k of ['feeds', 'feedsComplete', 'latestVisitorReviewDate', 'latestOwnerReplyDate']) {
     assert.strictEqual(f[k].status, 'missing', k);
   }
   assert.strictEqual(f.fetched_at, '2026-09-14T00:00:00.000Z');

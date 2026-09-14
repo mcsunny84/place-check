@@ -32,7 +32,7 @@ test('parseReviewVisitor: 안국역점 — 20건, 본문 10, 답글, 통계', ()
   assert.equal(s.votedKeywords[0].name, '음식이 맛있어요'); assert.equal(s.votedKeywords[0].count, 1312);
   assert.ok(s.themes.find((t) => t.name === '맛' && t.count === 1119));
   // 원본 facts 불변
-  assert.equal(base.reviews, undefined);
+  assert.equal(base.reviews.status, 'missing');
 });
 
 test('parseReviewVisitor: 마커 없음 → missing', () => {

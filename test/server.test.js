@@ -44,16 +44,18 @@ function req(url, ip = '1.1.1.1', extra = {}) {
 }
 const URL1 = 'https://m.place.naver.com/restaurant/2086785604/home';
 
-test('정상: 홈+4탭 fetch, 결과 auto, 캐시 저장', async () => {
+test('정상: 홈+2탭 fetch, 결과 auto, 캐시 저장', async () => {
   resetState(); const calls = fakeFetch(okPlan);
   srv.state.lastFetchStart = 0; // 간격 대기 0
   const t0 = Date.now();
   const r = await req(URL1);
   assert.equal(r.body.mode, 'auto');
   assert.equal(r.body.place.name, '키세카츠 안국역점');
-  assert.equal(calls.length, 5);
+  assert.equal(calls.length, 3);
   assert.ok(srv.readCache('2086785604'));
-  assert.ok(Date.now() - t0 >= 4 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.ok(Date.now() - t0 >= 2 * 1500 - 50, '요청 시작 간격 1.5초 적용');
+  assert.equal(r.body.answers.A4, 'yes', '찾아오는 길 = base.road');
+  assert.equal(r.body.answers.B5, 23, '사진 수는 홈에서');
   assert.equal(r.body.answers.D1, '2026-09-13', '리뷰 탭에서 D1 자동');
   assert.ok(r.body.insight && r.body.insight.strengths.length === 5, '리뷰 인사이트');
 });
@@ -100,7 +102,7 @@ test('추가 탭 비차단 실패 → 부분 결과(해당 필드 missing), 캐�
   const r = await req(URL1);
   assert.equal(r.body.mode, 'auto');
   const c = srv.readCache('2086785604');
-  assert.equal(c.description.status, 'missing'); assert.equal(c.feeds.status, 'missing');
+  assert.equal(c.reviews.status, 'missing'); assert.equal(c.feeds.status, 'missing');
 });
 
 test('IP 한도: 새 수집 3회/분, 4번째 429', async () => {
@@ -116,11 +118,10 @@ test('URL 오류 → no_url / unsupported', async () => {
   assert.equal((await req('https://m.map.naver.com/search2/site.naver?code=123')).body.reason, 'unsupported');
 });
 
-test('단축 URL: 해석 1회 + 홈 + 탭 4개 = 6회 (예산 6)', async () => {
+test('단축 URL: 해석 1회 + 홈 + 탭 2개 = 4회', async () => {
   resetState(); const calls = fakeFetch((url) => url.includes('naver.me') ? { status: 200, url: URL1, text: '' } : okPlan(url));
   const r = await req('https://naver.me/AbCd1234');
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 6);
-  assert.ok(calls.some((u) => /\/photo$/.test(u)), 'photo 탭 포함');
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, 4);
 });
 
 test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지나면 새로 fetch', async () => {
@@ -131,10 +132,10 @@ test('다시 읽어오기: 10분 이내면 캐시 재사용(refresh_denied), 지
   assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n); assert.equal(r.body.cache.refresh_denied, true);
   s.tick(11 * 60 * 1000);
   r = await req(URL1, '5.5.5.5', { refresh: true });
-  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n + 5, '새로 5회 fetch'); assert.equal(r.body.cache, undefined);
+  assert.equal(r.body.mode, 'auto'); assert.equal(calls.length, n + 3, '새로 3회 fetch'); assert.equal(r.body.cache, undefined);
   // refresh 없이 24시간 이내면 여전히 캐시
   r = await req(URL1, '6.6.6.6');
-  assert.equal(calls.length, n + 5);
+  assert.equal(calls.length, n + 3);
 });
 
 test('LLM 인사이트는 매장당 1회 호출 후 캐시 재사용', async () => {
@@ -150,8 +151,8 @@ test('LLM 인사이트는 매장당 1회 호출 후 캐시 재사용', async () 
 
 test('추가 탭 일시 실패 → 1회 재시도 후 성공', async () => {
   resetState(); let photoTries = 0;
-  const calls = fakeFetch((url) => { if (/\/photo$/.test(url)) { photoTries += 1; if (photoTries === 1) return new Error('timeout'); } return okPlan(url); });
+  const calls = fakeFetch((url) => { if (/\/feed$/.test(url)) { photoTries += 1; if (photoTries === 1) return new Error('timeout'); } return okPlan(url); });
   const r = await req(URL1);
-  assert.equal(r.body.mode, 'auto'); assert.equal(photoTries, 2); assert.equal(calls.length, 6);
-  assert.equal(srv.readCache('2086785604').totalImages.status, 'value');
+  assert.equal(r.body.mode, 'auto'); assert.equal(photoTries, 2); assert.equal(calls.length, 4);
+  assert.equal(srv.readCache('2086785604').feeds.status, 'value');
 });

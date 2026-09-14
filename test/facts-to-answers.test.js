@@ -21,7 +21,7 @@ const GOOD = {
   businessHours: V(WEEK.map((h, i) => i === 0 ? { ...h, breaks: [{ start: '15:00', end: '17:00' }] } : h)),
   hideBusinessHours: V(false),
   description: V('가'.repeat(250)), keywords: V(['안국역 돈카츠', '안국 맛집', '종로 돈카츠', '안국역 점심', '북촌 맛집']),
-  accessor: V('안국역 3번 출구 도보 2분'), homepages: V(['https://instagram.com/x']),
+  road: V('안국역 3번 출구 도보 2분'), homepages: V(['https://instagram.com/x']),
   menus: V([menu('로스카츠', V('19900'), V(2)), menu('히레카츠', V('21900'), V(0))]), menuImages: V(1),
   conveniences: V(['주차', '포장']), parkingInfo: V('건물 지하 주차 가능'),
   visitorReviewsTotal: V(120), hasCouponCount: V(1),
@@ -73,18 +73,19 @@ test('A2: hide=true + 7일 value → unknown(선행) / hide missing → unknown 
   assert.equal(st({ hideBusinessHours: V(false), businessHours: M }, 'A2'), 'unknown');
 });
 
-test('A3: breaks 있음 → yes / 자동 empty → unknown (fail 없음)', () => {
+test('A3: breaks 있음 → yes / 요일 빠짐(정기휴무) → yes / 7일+휴게 없음 → na / missing → unknown', () => {
   assert.equal(raw({ hideBusinessHours: V(false), businessHours: V([{ ...day('월'), breaks: [{ start: '15:00', end: '17:00' }] }]) }, 'A3'), 'yes');
-  assert.equal(st({ hideBusinessHours: V(false), businessHours: V(WEEK) }, 'A3'), 'unknown');
+  assert.equal(st({ hideBusinessHours: V(false), businessHours: V(WEEK) }, 'A3'), 'na');
+  assert.equal(st({ hideBusinessHours: V(false), businessHours: V(WEEK.slice(0, 6)) }, 'A3'), 'pass');
   assert.equal(st({ businessHours: E }, 'A3'), 'unknown');
-  assert.equal(st({ businessHours: V(WEEK) }, 'A3'), 'unknown');
-  assert.ok(!('A3' in run({ businessHours: V(WEEK) }).answers));
+  assert.equal(st({ businessHours: M }, 'A3'), 'unknown');
 });
 
-test('A4: accessor value → yes / empty·공백 → unknown', () => {
-  assert.equal(raw({ accessor: V('3번 출구') }, 'A4'), 'yes');
-  assert.equal(st({ accessor: E }, 'A4'), 'unknown');
-  assert.equal(st({ accessor: V('   ') }, 'A4'), 'unknown');
+test('A4: road value → yes / empty·공백 → no / missing → unknown', () => {
+  assert.equal(raw({ road: V('3번 출구') }, 'A4'), 'yes');
+  assert.equal(st({ road: E }, 'A4'), 'fail');
+  assert.equal(st({ road: V('   ') }, 'A4'), 'fail');
+  assert.equal(st({ road: M }, 'A4'), 'unknown');
 });
 
 test('B1: 글자 수 NFC·trim·코드포인트 / empty → 0 fail / missing → unknown', () => {
