@@ -46,7 +46,10 @@
   .grp:first-child { margin-top: 0; }
   .muted { color: var(--muted); font-size: 13px; }
   .notice { font-size: 13px; color: var(--muted); background: var(--paper-2); border: 1px solid var(--line); padding: 10px 12px; margin-top: 14px; word-break: keep-all; }
-  .kw { display: flex; justify-content: space-between; gap: 12px; padding: 9px 2px; font-size: 15px; }
+  .kw { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:8px 0; border-top:1px solid var(--line); font-size:14px; }
+  .kw > span:first-child { flex:1 1 auto; min-width:0; word-break:keep-all; overflow-wrap:anywhere; }
+  .kw > .tag, .kw > .badge { flex:0 1 auto; max-width:55%; text-align:right; word-break:keep-all; overflow-wrap:anywhere; }
+  @media (max-width: 760px) { .kw { flex-direction:column; gap:3px; } .kw > .tag, .kw > .badge { max-width:none; text-align:left; } }
   .kw + .kw { border-top: 1px solid var(--line); }
   .kw .tag { font-size: 12px; color: var(--muted); text-align: right; flex: none; }
   .kw .tag.good { color: var(--ok); font-weight: 700; }
