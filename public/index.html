@@ -359,6 +359,7 @@
     if (d.supplement && d.supplement.length) {
       html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
     }
+    html += renderCoupons(d.coupons);
     html += renderInsight(d.insight);
     html += kwSection(d.keywords);
     html += draftSection(d);
