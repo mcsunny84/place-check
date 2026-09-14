@@ -274,12 +274,6 @@ async function buildResponse(facts, asOf, queuedPosition) {
     recommendations: K.recommendKeywords({ district, station, categoryNorm: cat.norm, suffix: cat.suffix, menus: kwMenus, reviewMenus, situations, existing }),
     llm: null,
   };
-  if (facts.keywords_llm !== undefined) keywords.llm = facts.keywords_llm;
-  else {
-    keywords.llm = await KL.recommendKeywordsLLM(facts, { station, existing, blogTitles: v(facts.blogTitles) || [] }, { llm: state.llmKeywords });
-    const pid = v(facts.placeId);
-    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: keywords.llm }); } catch { /* 무시 */ } }
-  }
   const hours = v(facts.businessHours);
   const hoursLine = hours && hours.length ? `${hours[0].day}~${hours[hours.length - 1].day} ${hours[0].start}~${hours[0].end}` : undefined;
   const booking = auto.C1 && auto.C1.state === 'pass' ? 'naver' : (v(facts.virtualPhone) || v(facts.phone)) ? 'phone' : null;
@@ -291,24 +285,22 @@ async function buildResponse(facts, asOf, queuedPosition) {
     takeout: conv.includes('포장'), delivery: conv.includes('배달'), group: conv.includes('단체 이용 가능'),
     accessor: v(facts.accessor) || undefined,
   });
-  // 상세설명: 현재 글 진단 → 빠진 것만 제안 (LLM은 현재 문장 기준 수정/추가, 매장당 1회 캐시)
+  // 상세설명: 현재 글 진단 → 빠진 것만 제안
   const descText = v(facts.description) || '';
   const dctx = { district, station, categoryNorm: cat.norm, reviewMenus, existing, booking, phone: v(facts.virtualPhone) || v(facts.phone) || undefined };
   const descAnalysis = DA.analyzeDescription(descText, facts, dctx);
-  let descLLM;
-  if (facts.description_llm !== undefined) descLLM = facts.description_llm;
-  else {
-    descLLM = await DA.reviseDescriptionLLM(descText, facts, dctx, descAnalysis, { llm: state.llmDescription });
+
+  // LLM 3종(키워드·상세설명·리뷰)은 병렬 호출, 매장당 1회 후 facts와 함께 캐시(24h) — 캐시 hit마다 재호출·재과금 방지
+  const cachedKw = facts.keywords_llm !== undefined, cachedDesc = facts.description_llm !== undefined, cachedIns = facts.insight_llm !== undefined;
+  const [kwLLM, descLLM, insight] = await Promise.all([
+    cachedKw ? facts.keywords_llm : KL.recommendKeywordsLLM(facts, { station, existing, blogTitles: v(facts.blogTitles) || [] }, { llm: state.llmKeywords }),
+    cachedDesc ? facts.description_llm : DA.reviseDescriptionLLM(descText, facts, dctx, descAnalysis, { llm: state.llmDescription }),
+    cachedIns ? R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm }) : R.buildInsight(facts, { asOf, llm: state.llm }),
+  ]);
+  keywords.llm = kwLLM;
+  if (!(cachedKw && cachedDesc && cachedIns)) {
     const pid = v(facts.placeId);
-    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), description_llm: descLLM }); } catch { /* 무시 */ } }
-  }
-  // LLM 요약은 facts와 함께 캐시(24h) — 캐시 hit마다 재호출·재과금 방지
-  let insight;
-  if (facts.insight_llm !== undefined) insight = await R.buildInsight(facts, { asOf, llm: async () => facts.insight_llm });
-  else {
-    insight = await R.buildInsight(facts, { asOf, llm: state.llm });
-    const pid = v(facts.placeId);
-    if (insight && pid) { try { writeCache(pid, { ...(readCache(pid) || facts), insight_llm: insight.llm || null }); } catch { /* 캐시 실패 무시 */ } }
+    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM, description_llm: descLLM, insight_llm: insight ? (insight.llm || null) : null }); } catch { /* 캐시 실패 무시 */ } }
   }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
