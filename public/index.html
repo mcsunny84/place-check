@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>플레이스 체크</title>
+<style>
+  :root { --ink:#1b1b1b; --muted:#6b6b6b; --line:#e6e2da; --paper:#fbfaf7; --card:#fff; --ok:#2e7d4f; --warn:#c88a00; --bad:#c0392b; --na:#9a9a9a; --accent:#1f5f8b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif; background:var(--paper); color:var(--ink); line-height:1.5; }
+  header { padding:20px 16px 8px; max-width:720px; margin:0 auto; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); font-size:14px; margin:0; }
+  nav { display:flex; gap:6px; max-width:720px; margin:12px auto 0; padding:0 16px; }
+  nav button { flex:1; padding:10px 6px; border:1px solid var(--line); background:#fff; border-radius:10px; font-size:14px; }
+  nav button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+  main { max-width:720px; margin:0 auto; padding:12px 16px 60px; }
+  section[hidden] { display:none; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin:10px 0; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  input[type=text], input[type=number], input[type=date], select, textarea { width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:15px; background:#fff; }
+  textarea { min-height:90px; }
+  button.primary { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:12px 18px; font-size:16px; width:100%; }
+  button.ghost { background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:14px; }
+  .score { font-size:56px; font-weight:700; line-height:1; }
+  .grade { font-size:28px; font-weight:700; margin-left:8px; }
+  .bar { height:10px; background:#eee; border-radius:6px; overflow:hidden; margin:4px 0 8px; }
+  .bar i { display:block; height:100%; background:var(--accent); }
+  .st { display:inline-block; min-width:52px; text-align:center; font-size:12px; padding:2px 6px; border-radius:6px; color:#fff; }
+  .st.pass{background:var(--ok)} .st.partial{background:var(--warn)} .st.fail{background:var(--bad)} .st.unknown{background:var(--na)} .st.na{background:#ccc;color:#333}
+  .item { border-top:1px solid var(--line); padding:10px 0; }
+  .item:first-child { border-top:0; }
+  .item h4 { margin:0 0 4px; font-size:15px; }
+  .item p { margin:2px 0; font-size:14px; color:#333; }
+  .muted { color:var(--muted); font-size:13px; }
+  .todo { background:#fff8e6; border:1px solid #f1dfae; border-radius:10px; padding:10px 12px; margin:6px 0; }
+  .q { margin:12px 0; }
+  .q label { display:block; font-weight:600; margin-bottom:4px; font-size:15px; }
+  .grp { margin:18px 0 6px; font-size:16px; font-weight:700; }
+  .kw { display:flex; justify-content:space-between; gap:8px; padding:6px 0; border-top:1px solid var(--line); font-size:14px; }
+  .kw:first-child{border-top:0}
+  .tag { font-size:12px; color:var(--muted); }
+  .tag.good{color:var(--ok)}
+  pre.draft { white-space:pre-wrap; font-family:inherit; font-size:14px; background:#f6f5f1; padding:12px; border-radius:8px; }
+  .notice { font-size:13px; color:var(--muted); background:#f3f1ec; border-radius:8px; padding:8px 10px; margin:10px 0; }
+  .err { color:var(--bad); font-size:14px; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #ccc; border-top-color:var(--accent); border-radius:50%; animation:s 0.8s linear infinite; vertical-align:middle; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  footer { text-align:center; color:var(--muted); font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>플레이스 체크</h1>
+  <p class="sub">네이버 플레이스, 얼마나 채워져 있나요? 주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지.</p>
+</header>
+<nav>
+  <button class="on" data-tab="auto">자동 진단</button>
+  <button data-tab="self">직접 체크</button>
+  <button data-tab="about">안내</button>
+</nav>
+<main>
+  <section id="tab-auto">
+    <div class="card">
+      <label for="url"><b>플레이스 주소</b></label>
+      <input type="text" id="url" placeholder="예) https://m.place.naver.com/restaurant/1234567890/home  또는 naver.me/… 공유 링크">
+      <p class="muted">네이버 지도에서 내 가게 → 공유 → 링크 복사 → 여기 붙여넣기</p>
+      <button class="primary" id="go">검사하기</button>
+      <p id="status" class="muted"></p>
+    </div>
+    <div id="auto-result"></div>
+  </section>
+
+  <section id="tab-self" hidden>
+    <p class="notice">네이버에서 정보를 못 읽어올 때(또는 직접 하고 싶을 때) 스마트플레이스 관리 화면을 옆에 켜두고 답해 주세요. 답은 서버에 저장되지 않습니다.</p>
+    <form id="self-form"></form>
+    <div class="card">
+      <button class="primary" id="self-go" type="button">점수 보기</button>
+    </div>
+    <div id="self-result"></div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">대표키워드 진단·추천</h3>
+      <div class="q"><label>현재 대표키워드 (쉼표로 구분, 최대 5개)</label><input type="text" id="kw-cur" placeholder="안국역 맛집, 돈카츠 …"></div>
+      <div class="row">
+        <div class="q" style="flex:1"><label>동네</label><input type="text" id="kw-district" placeholder="안국동"></div>
+        <div class="q" style="flex:1"><label>가까운 역</label><input type="text" id="kw-station" placeholder="안국역"></div>
+      </div>
+      <div class="row">
+        <div class="q" style="flex:1"><label>업종</label><input type="text" id="kw-cat" placeholder="돈가스"></div>
+        <div class="q" style="flex:1"><label>대표 메뉴 (쉼표)</label><input type="text" id="kw-menus" placeholder="로스카츠, 히레카츠"></div>
+      </div>
+      <div class="q"><label>업체명</label><input type="text" id="kw-name" placeholder="키세카츠 안국역점"></div>
+      <button class="ghost" id="kw-go" type="button">키워드 진단</button>
+      <div id="kw-result"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px">Q&amp;A식 상세설명 초안</h3>
+      <div class="row">
+        <div class="q" style="flex:1"><label>영업시간 한 줄</label><input type="text" id="d-hours" placeholder="11:00~21:00 (휴게 16~17시)"></div>
+        <div class="q" style="flex:1"><label>휴무</label><input type="text" id="d-closed" placeholder="매주 월요일"></div>
+      </div>
+      <div class="row">
+        <div class="q" style="flex:1"><label>주차</label><input type="text" id="d-parking" placeholder="건물 주차장 1시간 무료"></div>
+        <div class="q" style="flex:1"><label>예약</label><select id="d-booking"><option value="">안 받음</option><option value="naver">네이버 예약</option><option value="phone">전화 예약</option></select></div>
+      </div>
+      <div class="row">
+        <div class="q" style="flex:1"><label>전화</label><input type="text" id="d-phone" placeholder="0507-…"></div>
+        <div class="q" style="flex:1"><label><input type="checkbox" id="d-takeout"> 포장 &nbsp; <input type="checkbox" id="d-delivery"> 배달 &nbsp; <input type="checkbox" id="d-group"> 단체</label></div>
+      </div>
+      <div class="q"><label>한 줄 자랑 (선택)</label><input type="text" id="d-brag" placeholder="300시간 숙성한 제주산 돼지고기"></div>
+      <button class="ghost" id="d-go" type="button">초안 만들기</button>
+      <div id="d-result"></div>
+    </div>
+  </section>
+
+  <section id="tab-about" hidden>
+    <div class="card">
+      <h3 style="margin-top:0">이게 뭔가요</h3>
+      <p>네이버 플레이스 공개 페이지를 읽어서 <b>사장님이 직접 채울 수 있는 항목</b>이 얼마나 채워져 있는지 점수로 보여주고, 무엇부터 할지 알려주는 무료 도구입니다.</p>
+      <p>순위·매출을 예측하거나 보장하지 않습니다. 점수는 "채움 정도"이지 "노출 정도"가 아닙니다.</p>
+      <h3>어떻게 보나요</h3>
+      <p>기본정보 20점 · 콘텐츠 40점 · 기능 15점 · 평판 운영 25점 = 100점. 자동으로 못 읽는 항목(최근 리뷰 날짜, 답글)은 몇 가지만 여쭤봅니다. 답하지 않으면 감점 없이 "모름"으로 둡니다.</p>
+      <h3>저장하나요</h3>
+      <p>가게 공개 정보는 하루 동안 서버에 보관해 같은 가게를 다시 검사할 때 씁니다. 사장님이 입력한 답은 저장하지 않습니다.</p>
+      <p class="muted">만든 사람: 키세카츠·택산가든 운영하는 사장. 문의는 오픈채팅으로.</p>
+    </div>
+  </section>
+</main>
+<footer>플레이스 체크 v1.0 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</footer>
+
+<script src="/lib/place-scoring.js"></script>
+<script src="/lib/keyword.js"></script>
+<script src="/lib/draft.js"></script>
+<script src="/lib/copy.js"></script>
+<script>
+(function(){
+  const S = window.PlaceScoring, K = window.PlaceKeyword, D = window.PlaceDraft, COPY = window.PlaceCopy.COPY || window.PlaceCopy;
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const today = () => { const d = new Date(); const k = new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); return k.toISOString().slice(0,10); };
+  const kst = (iso) => { const t = Date.parse(iso); if (!t) return ''; return new Date(t + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ') + ' KST'; };
+  const STATE_KO = { pass:'좋아요', partial:'조금 더', fail:'비었어요', unknown:'모름', na:'해당 없음' };
+  const GROUP_KO = { A:'기본정보', B:'콘텐츠', C:'기능', D:'평판 운영' };
+
+  // ---------- 탭 ----------
+  document.querySelectorAll('nav button').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+    ['auto','self','about'].forEach((t) => { $('#tab-' + t).hidden = t !== b.dataset.tab; });
+  }));
+
+  // ---------- 문항 정의 (셀프/보충 공용) ----------
+  const Q = {
+    A1: { t:'전화번호가 등록돼 있나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    A2: { t:'영업시간이 요일별로 등록돼 있나요', k:'sel', o:[['all','전부'],['some','일부만'],['no','아니오']] },
+    A3: { t:'휴게 시간·정기휴무가 등록돼 있나요', k:'sel', o:[['yes','예'],['no','아니오'],['na','우리 가게는 없음']] },
+    A4: { t:'찾아오는 길 안내문이 있나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    B1: { t:'상세설명 글자 수 (편집창에 표시되는 숫자)', k:'num' },
+    B2: { t:'대표키워드 몇 개 등록했나요', k:'sel', o:[[0,'0개'],[1,'1개'],[2,'2개'],[3,'3개'],[4,'4개'],[5,'5개']] },
+    B3: { t:'메뉴가 가격과 함께 등록돼 있나요', k:'sel', o:[['price','가격 포함'],['menu_only','메뉴만'],['none','없음']] },
+    B4: { t:'메뉴판 사진 또는 메뉴 이미지가 있나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    B5: { t:'등록된 사진이 몇 장인가요', k:'num' },
+    B6: { t:'마지막 소식(새소식) 올린 날짜', k:'date' },
+    B7: { t:'홈페이지·인스타 등 링크가 등록돼 있나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    C1: { t:'네이버 예약을 켰나요', k:'sel', o:[['on','켬'],['off','끔'],['na','예약 안 받는 업종']] },
+    C2: { t:'톡톡 또는 스마트콜을 켰나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    C3: { t:'진행 중인 쿠폰이나 이벤트 소식이 있나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    C4: { t:'편의시설·주차 정보를 등록했나요', k:'sel', o:[['yes','예'],['no','아니오']] },
+    D1: { t:'가장 최근 방문자 리뷰 날짜', k:'date', none:'리뷰 없음' },
+    D2: { t:'가장 최근 사장님 답글 날짜', k:'date', none:'답글 단 적 없음' },
+    D3: { t:'상세설명·소식 원문 붙여넣기 (선택) — 주의 표현 검사', k:'text' },
+  };
+  function qHtml(id, prefix) {
+    const q = Q[id]; const n = prefix + id;
+    let ctl = '';
+    if (q.k === 'sel') ctl = `<select name="${n}"><option value="">선택</option>${q.o.map(([v,l]) => `<option value="${v}">${l}</option>`).join('')}</select>`;
+    if (q.k === 'num') ctl = `<input type="number" name="${n}" min="0" max="9999" placeholder="숫자">`;
+    if (q.k === 'date') ctl = `<div class="row"><input type="date" name="${n}" style="flex:1"><label style="white-space:nowrap"><input type="checkbox" name="${n}_none"> ${q.none || '없음'}</label></div>`;
+    if (q.k === 'text') ctl = `<textarea name="${n}" placeholder="붙여넣으면 리뷰 강요·효능 단정 같은 표현을 찾아드려요"></textarea>`;
+    return `<div class="q" data-id="${id}"><label>${id} · ${esc(q.t)}</label>${ctl}</div>`;
+  }
+  function readAnswers(form, prefix) {
+    const a = {};
+    for (const id of Object.keys(Q)) {
+      const q = Q[id]; const el = form.elements[prefix + id]; if (!el) continue;
+      if (q.k === 'date') { const none = form.elements[prefix + id + '_none']; if (none && none.checked) a[id] = 'none'; else if (el.value) a[id] = el.value; }
+      else if (q.k === 'text') { if (el.value.trim()) a[id] = { text: el.value }; }
+      else if (el.value !== '') a[id] = q.k === 'num' ? el.value : (id === 'B2' ? Number(el.value) : el.value);
+    }
+    return a;
+  }
+
+  // 셀프 폼 렌더
+  (function(){ const f = $('#self-form'); let html = '';
+    for (const g of ['A','B','C','D']) { html += `<div class="grp">${GROUP_KO[g]}</div><div class="card">` + S.ITEMS.filter((i) => i.group === g).map((i) => qHtml(i.id, 'self_')).join('') + '</div>'; }
+    f.innerHTML = html; })();
+
+  // ---------- 결과 렌더 ----------
+  function renderScore(result, todos, auto) {
+    const r = result;
+    const head = r.display === 'insufficient'
+      ? `<div class="score">—</div><p class="muted">답변이 부족해요. 몇 가지만 더 답하면 점수가 나와요.</p>`
+      : r.display === 'grade'
+        ? `<div class="score">${r.grade}</div><p class="muted">등급만 표시 (읽은 항목 ${Math.round(r.coverage*100)}%)</p>`
+        : `<div><span class="score">${r.score}</span><span class="grade">${r.grade}</span></div><p class="muted">100점 만점 · 읽은 항목 ${Math.round(r.coverage*100)}%</p>`;
+    let bars = '';
+    for (const g of ['A','B','C','D']) { const x = r.groups[g]; const pct = x.applicable ? Math.round(100 * x.earned / x.applicable) : 0;
+      bars += `<div><span style="font-size:13px">${GROUP_KO[g]} ${x.earned}/${x.applicable}</span><div class="bar"><i style="width:${pct}%"></i></div></div>`; }
+    let todoHtml = todos.length ? todos.map((id, i) => `<div class="todo"><b>${i+1}. ${esc(labelOf(id))}</b><p style="margin:4px 0 0;font-size:14px">${esc(COPY[id].how)}</p></div>`).join('') : '<p class="muted">채울 항목이 없어요. 훌륭해요.</p>';
+    let items = '';
+    for (const g of ['A','B','C','D']) { items += `<div class="grp">${GROUP_KO[g]}</div><div class="card">`;
+      for (const it of r.items.filter((i) => S.ITEMS.find((x) => x.id === i.id).group === g)) {
+        const src = auto && auto[it.id] ? `<span class="muted"> · ${auto[it.id].source === 'manual' ? '직접 답' : '자동'}</span>` : '';
+        items += `<div class="item"><h4><span class="st ${it.state}">${STATE_KO[it.state]}</span> ${esc(labelOf(it.id))} <span class="muted">(${it.weight}점)</span>${src}</h4>`;
+        if (it.state !== 'pass' && it.state !== 'na') items += `<p>${esc(COPY[it.id].why)}</p><p class="muted">${esc(COPY[it.id].how)}</p>`;
+        items += '</div>';
+      } items += '</div>'; }
+    return `<div class="card">${head}${bars}</div><div class="grp">이번 주 할 일</div>${todoHtml}${items}`;
+  }
+  const labelOf = (id) => (S.ITEMS.find((x) => x.id === id) || {}).label || id;
+
+  function renderKeywords(kw) {
+    const diag = kw.diagnosis.map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.labels.includes('좋아요') ? 'good' : ''}">${esc(d.labels.join(' · '))}</span></div>`).join('') || '<p class="muted">등록된 대표키워드가 없어요.</p>';
+    const rec = kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}</span></div>`).join('') || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
+    return `<div class="card"><h3 style="margin:0 0 6px">현재 대표키워드</h3>${diag}</div><div class="card"><h3 style="margin:0 0 6px">추천 키워드 (최대 10)</h3>${rec}<p class="notice">검색량은 <b>네이버 검색광고 &gt; 키워드 도구</b>에서 확인하세요. 월 검색수 100 미만은 후순위.</p><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p></div>`;
+  }
+  function renderDraft(text) {
+    return `<div class="card"><h3 style="margin:0 0 6px">Q&amp;A식 상세설명 초안</h3><pre class="draft" id="draft-text">${esc(text)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
+  }
+
+  // ---------- 자동 진단 ----------
+  let last = null;
+  $('#go').addEventListener('click', async () => {
+    const url = $('#url').value.trim(); if (!url) return;
+    $('#status').innerHTML = '<span class="spin"></span> 네이버에서 정보를 읽는 중… (최대 90초)';
+    $('#auto-result').innerHTML = '';
+    let data;
+    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url }) }); data = await res.json(); }
+    catch (e) { data = { mode:'fallback', reason:'network' }; }
+    $('#status').textContent = '';
+    if (data.mode !== 'auto') {
+      const R = { no_url:'주소를 찾지 못했어요. 링크를 다시 확인해 주세요.', unsupported:'지원하지 않는 주소 형식이에요. 네이버 지도의 가게 페이지 링크를 붙여넣어 주세요.', cooldown:'지금은 네이버에서 정보를 읽어올 수 없어요(잠시 차단). 아래 "직접 체크"로 진행해 주세요.', busy:'지금 대기가 많아요. 잠시 후 다시 시도하거나 "직접 체크"로 진행해 주세요.', timeout:'시간이 오래 걸려요. 잠시 후 다시 시도해 주세요.', unreadable:'이 페이지에서 정보를 읽지 못했어요. "직접 체크"로 진행해 주세요.', ip_limit:'너무 자주 요청했어요. 1분 뒤 다시.', unsupported_url:'공유 링크가 가게 페이지로 연결되지 않아요.' };
+      $('#auto-result').innerHTML = `<div class="card"><p class="err">${esc(R[data.reason] || ('실패: ' + data.reason))}</p><button class="ghost" onclick="document.querySelector('nav button[data-tab=self]').click()">직접 체크로 가기</button></div>`;
+      return;
+    }
+    last = data;
+    renderAuto();
+  });
+  function renderAuto() {
+    const d = last; const p = d.place;
+    let html = `<div class="card"><b>${esc(p.name)}</b> <span class="muted">${esc(p.category || '')} · ${esc(p.address || '')}</span><p class="muted" style="margin:4px 0 0">읽은 시각 ${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</p></div>`;
+    html += renderScore(d.result, d.todos, d.auto);
+    if (d.supplement && d.supplement.length) {
+      html += `<div class="grp">자동으로 못 읽은 것 — 답하면 더 정확해져요</div><form id="sup-form"><div class="card">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}<button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`;
+    }
+    html += renderKeywords(d.keywords);
+    html += renderDraft(d.draft);
+    $('#auto-result').innerHTML = html;
+    const sg = $('#sup-go');
+    if (sg) sg.addEventListener('click', () => {
+      const extra = readAnswers($('#sup-form'), 'sup_');
+      const merged = Object.assign({}, d.answers, extra);
+      const result = S.computeScore(merged, { asOf: d.as_of });
+      const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
+      const keep = $('#sup-form').innerHTML;
+      $('#auto-result').innerHTML = `<div class="card"><b>${esc(p.name)}</b></div>` + renderScore(result, S.pickTodos(result), auto) + `<div class="grp">보충 답변</div><form id="sup-form">${keep}</form>` + renderKeywords(d.keywords) + renderDraft(d.draft);
+      // 값 복원
+      const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
+      $('#sup-go').addEventListener('click', () => sg.click());
+    });
+  }
+
+  // ---------- 셀프 체크 ----------
+  $('#self-go').addEventListener('click', () => {
+    const answers = readAnswers($('#self-form'), 'self_');
+    const result = S.computeScore(answers, { asOf: today() });
+    $('#self-result').innerHTML = renderScore(result, S.pickTodos(result), null) + `<p class="notice">이 점수는 사장님이 직접 답한 내용의 집계입니다. 저희가 네이버에서 확인한 값이 아닙니다.</p>`;
+    $('#self-result').scrollIntoView({ behavior:'smooth' });
+  });
+  $('#kw-go').addEventListener('click', () => {
+    const cur = $('#kw-cur').value.split(',').map((s) => s.trim()).filter(Boolean).slice(0,5);
+    const menus = $('#kw-menus').value.split(',').map((s) => s.trim()).filter(Boolean);
+    const category = $('#kw-cat').value.trim(); const cat = K.normalizeCategory(category);
+    const ctx = { name: $('#kw-name').value.trim(), district: $('#kw-district').value.trim() || null, station: $('#kw-station').value.trim() || null, category, menus: menus.map(K.menuForKeyword) };
+    $('#kw-result').innerHTML = renderKeywords({ diagnosis: K.diagnoseKeywords(cur, ctx), recommendations: K.recommendKeywords({ district: ctx.district, station: ctx.station, categoryNorm: cat.norm, suffix: cat.suffix, menus: ctx.menus, situations: [], existing: cur }) });
+  });
+  $('#d-go').addEventListener('click', () => {
+    const menus = $('#kw-menus').value.split(',').map((s) => s.trim()).filter(Boolean).map((name) => ({ name }));
+    const cat = K.normalizeCategory($('#kw-cat').value.trim());
+    const text = D.buildDraft({ name: $('#kw-name').value.trim() || '우리 가게', station: $('#kw-station').value.trim() || undefined, district: $('#kw-district').value.trim() || undefined, categoryNorm: cat.norm, menus, hours: $('#d-hours').value.trim() || undefined, closed: $('#d-closed').value.trim() || undefined, parking: $('#d-parking').value.trim() || undefined, booking: $('#d-booking').value || null, phone: $('#d-phone').value.trim() || undefined, takeout: $('#d-takeout').checked, delivery: $('#d-delivery').checked, group: $('#d-group').checked, brag: $('#d-brag').value.trim() || undefined });
+    $('#d-result').innerHTML = renderDraft(text);
+  });
+})();
+</script>
+</body>
+</html>

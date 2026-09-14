@@ -1,0 +1,7 @@
+{
+  "claude": "C:/Users/Design/Dev/claudecode/place-check/.review-bridge/claude-2.1.270.exe",
+  "codex": "C:/Users/Design/AppData/Local/OpenAI/Codex/bin/bffc5354119c8421/codex.exe",
+  "claudeModel": "claude-fable-5-1",
+  "codexModel": "gpt-6-astra",
+  "timeoutMs": 600000
+}
