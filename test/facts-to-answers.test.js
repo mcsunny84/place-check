@@ -187,7 +187,7 @@ test('C2: smartCall true 또는 talktalk value → yes / false and empty → no 
   assert.equal(st({ smartCallUsing: M, talktalkUrl: E }, 'C2'), 'unknown');
 });
 
-test('C3: 쿠폰 ≥1 → yes / 0 + EVENT 기간 판정 (자정 경계) / feeds missing·incomplete → unknown', () => {
+test('C3: 쿠폰 ≥1 → yes / 0 + EVENT 기간 판정 (자정 경계) / feeds missing → unknown', () => {
   const ev = { createdAt: '2026-09-01', category: 'EVENT', period: '2026.09.15. ~ 2026.09.20.', periodStart: '2026-09-15', periodEnd: '2026-09-20', desc: '' };
   const base = { hasCouponCount: V(0), feeds: V([ev]), feedsComplete: V(true) };
   assert.equal(raw(base, 'C3', '2026-09-14'), 'no');            // R3-1: 예정 → fail
@@ -199,7 +199,7 @@ test('C3: 쿠폰 ≥1 → yes / 0 + EVENT 기간 판정 (자정 경계) / feeds 
   assert.equal(raw({ hasCouponCount: V(0), feeds: V([]), feedsComplete: V(true) }, 'C3'), 'no');
   assert.equal(raw({ hasCouponCount: V(0), feeds: E, feedsComplete: V(true) }, 'C3'), 'no');
   assert.equal(st({ hasCouponCount: V(0), feeds: M }, 'C3'), 'unknown');
-  assert.equal(st({ hasCouponCount: V(0), feeds: V([]), feedsComplete: V(false) }, 'C3'), 'unknown');
+  assert.equal(st({ hasCouponCount: V(0), feeds: V([]), feedsComplete: V(false) }, 'C3'), 'fail'); // 첫 페이지 기준 판정
   assert.equal(st({ hasCouponCount: M, feeds: V([]), feedsComplete: V(true) }, 'C3'), 'unknown');
   // 기간 missing인 EVENT → unknown (진행 중 EVENT가 따로 있으면 pass)
   const noPeriod = { ...ev, period: null, periodStart: undefined, periodEnd: undefined };
