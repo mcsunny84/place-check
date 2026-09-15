@@ -3,6 +3,13 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+// .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음 — 모듈 require 전에 읽어야 REVIEW_MODEL이 적용됨
+try {
+  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+} catch { /* .env 없음 */ }
 const { parsePlaceUrl } = require('./lib/url-parse');
 const P = require('./lib/place-parse');
 const { factsToAnswers } = require('./lib/facts-to-answers');
@@ -15,13 +22,6 @@ const DA = require('./lib/draft-analysis');
 const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
 
-// .env (선택): KEY=VALUE 줄만, 이미 있는 process.env는 덮어쓰지 않음
-try {
-  for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
-    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-  }
-} catch { /* .env 없음 */ }
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
 const LIB = path.join(__dirname, 'lib');
@@ -62,6 +62,7 @@ const state = {
   fetchAd: undefined,        // 검색광고 API fetch 주입(테스트)
   adEnv: undefined,          // 검색광고 자격증명 env 주입(테스트)
   now: () => Date.now(),
+  analyses: new Map(),       // `${placeId}:${fetched_at}` -> buildResponse Promise (같은 수집분의 동시 요청은 AI 분석 1회 공유)
 };
 
 const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -96,6 +97,7 @@ function ipAllowed(ip) {
   const t = state.now();
   const arr = (state.ipLog.get(ip) || []).filter((x) => t - x < 60_000);
   state.ipLog.set(ip, arr);
+  if (state.ipLog.size > 1000) for (const [k, a] of state.ipLog) if (!a.some((x) => t - x < 60_000)) state.ipLog.delete(k); // 만료 IP 정리
   if (arr.length >= IP_LIMIT) return false;
   arr.push(t);
   return true;
@@ -160,29 +162,34 @@ async function fetchCoupons({ placeId, type }) {
 // 최근 REVIEW_DAYS일 리뷰를 커서로 모은다. 예산 내에서만, 실패는 조용히 중단(SSR 20건이 폴백).
 async function collectReviews(job, placeId, type, facts, budgetRef) {
   const now = new Date(state.now());
-  const cutoff = new Date(now.getTime() - REVIEW_DAYS * 86400000).toISOString().slice(0, 10);
+  const cutoff = kstDate(now.getTime() - REVIEW_DAYS * 86400000);
   const all = [];
-  let after = null;
+  let after = null, complete = false; // 정상 종결(창 끝·마지막 페이지)일 때만 true — 타임아웃·예산·커서 이상은 미완료
+  const seen = new Set();
   for (let page = 0; page < REVIEW_PAGES_MAX && budgetRef.n > 0; page++) {
     budgetRef.n -= 1;
     let items;
     try { items = await fetchReviewsPage({ placeId, type, after }); }
     catch (e) { if (e instanceof Blocked) throw e; break; }
-    if (!items || !items.length) break;
+    if (!items) break;
+    if (!items.length) { complete = true; break; }
     const norm = items.map((it) => P.normalizeReview(it, now)).filter(Boolean);
+    if (!norm.length) break;
     all.push(...norm);
     const oldest = norm.map((r) => r.visited || r.created).filter(Boolean).sort()[0];
+    if ((oldest && oldest < cutoff) || items.length < 50) { complete = true; break; }
     after = norm[norm.length - 1].cursor;
-    if (!after || (oldest && oldest < cutoff) || items.length < 50) break;
+    if (!after || seen.has(after)) break;
+    seen.add(after);
   }
   if (!all.length) return facts;
   const ssr = facts.reviews && facts.reviews.status === 'value' ? facts.reviews.value : [];
+  const latestAny = P.dedupeReviews([...all, ...ssr]).map((r) => r.visited || r.created).filter(Boolean).sort().pop() || null; // 창 밖이어도 D1(최근 리뷰일)용으로 보존
   const merged = P.dedupeReviews([...all, ...ssr]).filter((r) => { const d = r.visited || r.created; return !d || d >= cutoff; });
   merged.sort((a, b) => String(b.visited || b.created || '').localeCompare(String(a.visited || a.created || '')));
-  const complete = all.length < REVIEW_PAGES_MAX * 50;
   const oldest = merged.map((r) => r.visited || r.created).filter(Boolean).sort()[0] || cutoff;
   // 상한에 걸리면 실제 수집된 가장 오래된 날짜를 창 시작으로 표시(6개월을 다 못 채웠다는 사실을 숨기지 않음)
-  return { ...facts, reviews: { status: 'value', value: merged }, reviewWindow: { status: 'value', value: { days: REVIEW_DAYS, from: complete ? cutoff : (oldest > cutoff ? oldest : cutoff), fetched: all.length, complete } } };
+  return { ...facts, reviews: { status: 'value', value: merged }, latestReviewDate: latestAny ? { status: 'value', value: latestAny } : { status: 'missing' }, reviewWindow: { status: 'value', value: { days: REVIEW_DAYS, from: complete ? cutoff : (oldest > cutoff ? oldest : cutoff), fetched: P.dedupeReviews(all).length, complete } } };
 }
 
 // ---------- 작업 실행 ----------
@@ -281,7 +288,18 @@ function enqueue(parsed) {
 }
 
 // ---------- 결과 조립 ----------
-async function buildResponse(facts, asOf, queuedPosition) {
+// 같은 매장·같은 수집분의 동시 요청(버튼 연타, 합류 대기자)은 분석 1회를 공유 — AI 중복 호출·캐시 경쟁·통계 중복 방지
+function buildResponse(facts, asOf, queuedPosition) {
+  const v = (o) => (o && o.status === 'value' ? o.value : null);
+  const key = `${v(facts.placeId)}:${facts.fetched_at}:${asOf}`;
+  let p = state.analyses.get(key);
+  if (!p) {
+    p = buildResponseUncached(facts, asOf, queuedPosition).finally(() => state.analyses.delete(key));
+    state.analyses.set(key, p);
+  }
+  return p.then((out) => ({ ...out, queued_position: queuedPosition }));
+}
+async function buildResponseUncached(facts, asOf, queuedPosition) {
   const v = (o) => (o && o.status === 'value' ? o.value : null);
   const { answers, auto } = factsToAnswers(facts, { asOf });
   const result = S.computeScore(answers, { asOf });
@@ -315,7 +333,7 @@ async function buildResponse(facts, asOf, queuedPosition) {
     hours: hoursLine, parking: v(facts.parkingInfo) || (conv.includes('주차') ? '주차 가능' : undefined),
     booking, phone: v(facts.virtualPhone) || v(facts.phone) || undefined,
     takeout: conv.includes('포장'), delivery: conv.includes('배달'), group: conv.includes('단체 이용 가능'),
-    accessor: v(facts.accessor) || undefined,
+    accessor: v(facts.road) || undefined, // 찾아오는 길(base.road) — accessor는 업주 정보라 오매핑(07번)
   });
   // 상세설명: 현재 글 진단 → 빠진 것만 제안
   const descText = v(facts.description) || '';
@@ -352,7 +370,13 @@ async function buildResponse(facts, asOf, queuedPosition) {
   if (!(cachedKw && cachedDesc && cachedIns && facts.keywords_volume !== undefined)) {
     const pid = v(facts.placeId);
     // null(키 없음·실패)은 캐시하지 않는다(undefined → JSON에서 빠짐) — 키를 나중에 넣으면 다음 요청에서 다시 시도
-    if (pid) { try { writeCache(pid, { ...(readCache(pid) || facts), keywords_llm: kwLLM || undefined, keywords_volume: volumes || undefined, description_llm: descLLM || undefined, insight_llm: (insight && insight.llm) || undefined }); } catch { /* 캐시 실패 무시 */ } }
+    if (pid) {
+      try {
+        const ex = readCache(pid) || facts;
+        // 같은 수집분에만 붙이고(새로 읽은 facts에 옛 분석 금지), 이번에 실패한 필드는 기존 성공값을 지우지 않는다
+        if (ex.fetched_at === facts.fetched_at) writeCache(pid, { ...ex, keywords_llm: kwLLM || ex.keywords_llm || undefined, keywords_volume: volumes || ex.keywords_volume || undefined, description_llm: descLLM || ex.description_llm || undefined, insight_llm: (insight && insight.llm) || ex.insight_llm || undefined });
+      } catch { /* 캐시 실패 무시 */ }
+    }
   }
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,

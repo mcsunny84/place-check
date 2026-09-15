@@ -162,7 +162,7 @@
     </div>
   </section>
 
-  <p class="footer-note">플레이스 체크 v1.1 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</p>
+  <p class="footer-note">플레이스 체크 v1.2 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</p>
 </div>
 
 <script src="/lib/place-scoring.js"></script>
@@ -174,9 +174,18 @@
   const S = window.PlaceScoring, K = window.PlaceKeyword, D = window.PlaceDraft, COPY = window.PlaceCopy.COPY || window.PlaceCopy;
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const today = () => { const d = new Date(); const k = new Date(d.getTime() + (d.getTimezoneOffset() + 540) * 60000); return k.toISOString().slice(0,10); };
+  const today = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // KST 달력일(폰 시간대 무관)
   const kst = (iso) => { const t = Date.parse(iso); if (!t) return ''; return new Date(t + 9 * 3600000).toISOString().slice(0, 16).replace('T', ' ') + ' KST'; };
   const STATE_KO = { pass:'좋아요', partial:'조금 더', fail:'비었어요', unknown:'확인 안 됨', na:'해당 없음' };
+  // fail은 원인별로: 값이 없으면 '비었어요', 날짜가 오래됐으면 '오래됐어요', 수가 모자라면 '부족해요', D3는 '주의 표현'
+  const stateLabel = (id, state, raw) => {
+    if (state !== 'fail') return STATE_KO[state];
+    if (id === 'D3') return '주의 표현';
+    if (raw == null || raw === '' || raw === 'none' || raw === 'no' || raw === 'off' || Number(raw) === 0) return '비었어요';
+    if (id === 'B6' || id === 'D1' || id === 'D2') return '오래됐어요';
+    if (id === 'B1' || id === 'B2' || id === 'B5') return '부족해요';
+    return '비었어요';
+  };
   const STATE_CLS = { pass:'good', partial:'mid', fail:'bad', unknown:'mute', na:'mute' };
   const GROUP_KO = { A:'기본정보', B:'콘텐츠', C:'기능', D:'평판 운영' };
   const secHead = (no, kr, en) => `<div class="sec-head"><span class="no">${no}</span><span class="kr">${kr}</span><span class="en">${en}</span></div>`;
@@ -235,7 +244,7 @@
     f.innerHTML = html; })();
 
   // ---------- 결과 렌더 ----------
-  function renderScore(result, todos, auto) {
+  function renderScore(result, todos, auto, answers) {
     const r = result;
     const knownW = Object.values(r.groups).reduce((a, x) => a + x.known, 0);
     const unkW = Object.values(r.groups).reduce((a, x) => a + (x.applicable - x.known), 0);
@@ -252,7 +261,8 @@
     for (const g of ['A','B','C','D']) { items += `<div class="grp">${GROUP_KO[g]}</div><div class="card">`;
       for (const it of r.items.filter((i) => S.ITEMS.find((x) => x.id === i.id).group === g)) {
         const src = auto && auto[it.id] ? `<span class="muted">· ${auto[it.id].source === 'manual' ? '직접 답' : '자동'}</span>` : '';
-        items += `<div class="item"><h4><span class="badge ${STATE_CLS[it.state]}">${STATE_KO[it.state]}</span> ${esc(labelOf(it.id))} <span class="muted">(${it.weight}점)</span>${src}</h4>`;
+        const note = auto && auto[it.id] && it.state !== 'unknown' && auto[it.id].note ? `<span class="muted">· ${esc(auto[it.id].note)}</span>` : '';
+        items += `<div class="item"><h4><span class="badge ${STATE_CLS[it.state]}">${stateLabel(it.id, it.state, answers ? answers[it.id] : undefined)}</span> ${esc(labelOf(it.id))} <span class="muted">(${it.weight}점)</span>${src}${note}</h4>`;
         if (it.state !== 'pass' && it.state !== 'na') items += `<p>${esc(COPY[it.id].why)}</p><p class="muted">${esc(COPY[it.id].how)}</p>`;
         items += '</div>';
       } items += '</div>'; }
@@ -315,39 +325,55 @@
       if (a.edits && a.edits.length) html += `<div class="card"><h3 class="sub-h" style="margin-top:0">고칠 점</h3>` + a.edits.map((e) => `<div class="item"><p>${esc(e.what)}</p><p class="muted">${esc(e.why)}</p></div>`).join('') + '</div>';
       if (a.add && a.add.length) html += `<div class="card"><h3 class="sub-h" style="margin-top:0">추가할 Q&amp;A (플레이스 등록 정보 기준)</h3>` + a.add.map((x) => `<div class="item"><p><b>Q. ${esc(x.q)}</b></p><p>A. ${esc(x.a)}</p><p class="muted">${esc(x.why)}</p></div>`).join('') + '</div>';
     }
-    html += `<details class="card"><summary class="muted">참고: 처음부터 다시 쓸 때 쓸 전체 초안 보기</summary><pre class="draft" id="draft-text">${esc(draftText)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button></details>`;
+    html += `<details class="card"><summary class="muted">참고: 처음부터 다시 쓸 때 쓸 전체 초안 보기</summary><pre class="draft">${esc(draftText)}</pre><button class="ghost" onclick="copyDraft(this)">복사</button></details>`;
     return html;
   }
+  window.copyDraft = (btn) => { // 누른 버튼 바로 앞 초안만 복사, 클립보드 막히면 선택해 줌
+    const pre = btn.previousElementSibling; const t = pre.textContent;
+    const sel = () => { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = '길게 눌러 복사하세요'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(() => { btn.textContent = '복사됨'; }, sel); else sel();
+  };
   function renderDraft(text) {
-    return `<div class="card" style="margin-top:14px"><pre class="draft" id="draft-text">${esc(text)}</pre><button class="ghost" onclick="navigator.clipboard.writeText(document.getElementById('draft-text').textContent).then(()=>this.textContent='복사됨')">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
+    return `<div class="card" style="margin-top:14px"><pre class="draft">${esc(text)}</pre><button class="ghost" onclick="copyDraft(this)">복사</button><p class="notice">AI 검색이 읽기 쉬운 질문-답 구조입니다. 노출을 보장하지는 않습니다. 스마트플레이스 &gt; 업체정보 &gt; 상세설명에 붙여넣고 다듬어 쓰세요.</p></div>`;
   }
   // 자동 진단 결과에서만 쓰는 섹션 래퍼 — 직접 체크 탭은 정적 sec-head가 이미 있다
   const kwSection = (kw) => `<section class="res">${secHead('05', '대표키워드', 'Keywords')}${renderKeywords(kw)}</section>`;
   const draftSection = (d) => `<section class="res">${secHead('06', '상세설명 진단·제안', 'Description')}${renderDescription(d.description, d.draft)}</section>`;
 
   // ---------- 자동 진단 ----------
-  let last = null;
+  let last = null, lastUrl = '', seq = 0, refreshTimer = null;
   async function runCheck(refresh) {
-    const url = $('#url').value.trim(); if (!url) return;
+    const url = refresh ? lastUrl : $('#url').value.trim(); if (!url) return; // refresh는 지금 보고 있는 매장 기준(입력창 편집 중이어도)
+    const my = ++seq; // 연타·URL 변경 시 마지막 요청만 화면에
+    $('#go').disabled = true;
     $('#status').innerHTML = '<span class="spin"></span>네이버에서 정보를 읽는 중… (최대 90초)';
     $('#auto-result').innerHTML = '';
     let data;
     try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh }) }); data = await res.json(); }
     catch (e) { data = { mode:'fallback', reason:'network' }; }
+    if (my !== seq) return;
+    $('#go').disabled = false;
     $('#status').textContent = '';
     if (data.mode !== 'auto') {
       const R = { no_url:'주소를 찾지 못했어요. 링크를 다시 확인해 주세요.', unsupported:'지원하지 않는 주소 형식이에요. 네이버 지도의 가게 페이지 링크를 붙여넣어 주세요.', cooldown:'지금은 네이버에서 정보를 읽어올 수 없어요(잠시 차단). 아래 "직접 체크"로 진행해 주세요.', busy:'지금 대기가 많아요. 잠시 후 다시 시도하거나 "직접 체크"로 진행해 주세요.', timeout:'시간이 오래 걸려요. 잠시 후 다시 시도해 주세요.', unreadable:'이 페이지에서 정보를 읽지 못했어요. "직접 체크"로 진행해 주세요.', ip_limit:'너무 자주 요청했어요. 1분 뒤 다시.', unsupported_url:'공유 링크가 가게 페이지로 연결되지 않아요.' };
       $('#auto-result').innerHTML = `<div class="card" style="margin-top:14px"><p class="err">${esc(R[data.reason] || ('실패: ' + data.reason))}</p><div class="actions" style="justify-content:flex-start"><button class="ghost" onclick="document.querySelector('.topbar nav a[data-tab=self]').click()">직접 체크로 가기</button></div></div>`;
       return;
     }
-    last = data;
+    last = data; lastUrl = url;
     renderAuto();
   }
   $('#go').addEventListener('click', () => runCheck(false));
   function refreshBtn(d) {
     const age = (Date.now() - Date.parse(d.place.fetched_at || 0)) / 60000;
-    if (age < 10) return `<p class="muted" style="margin-top:10px">수정 후 다시 검사하려면 ${Math.ceil(10 - age)}분 뒤 "다시 읽어오기"를 누르세요.${d.cache && d.cache.refresh_denied ? ' (방금 읽은 자료를 다시 보여드렸어요)' : ''}</p>`;
-    return `<div class="actions" style="justify-content:flex-start"><button class="ghost" id="refresh">네이버에서 다시 읽어오기</button><span class="muted">수정한 뒤 반영 확인용</span></div>`;
+    const wait = age < 10 ? Math.ceil(10 - age) : 0;
+    return `<div class="actions" style="justify-content:flex-start"><button class="ghost" id="refresh" ${wait ? 'disabled' : ''}>${wait ? `다시 읽어오기 (${wait}분 뒤 가능)` : '네이버에서 다시 읽어오기'}</button><span class="muted">${wait ? `수정한 내용은 ${wait}분 뒤 다시 읽을 수 있어요${d.cache && d.cache.refresh_denied ? ' · 방금 읽은 자료를 보여드렸어요' : ''}` : '수정한 뒤 반영 확인용'}</span></div>`;
+  }
+  function bindRefresh(d) {
+    const rb = $('#refresh'); if (!rb) return;
+    rb.addEventListener('click', () => runCheck(true), { once: true });
+    clearTimeout(refreshTimer);
+    const left = 10 * 60000 - (Date.now() - Date.parse(d.place.fetched_at || 0));
+    if (left > 0) refreshTimer = setTimeout(() => { const b = $('#refresh'); if (b) { b.disabled = false; b.textContent = '네이버에서 다시 읽어오기'; } }, left + 1000);
   }
   function placeCard(p, note) {
     return `<div class="card" style="margin-top:14px"><div class="kv"><span class="k">업체</span><span><b>${esc(p.name)}</b></span><span class="k">분류·주소</span><span>${esc(p.category || '')} · ${esc(p.address || '')}</span>${note}</div>`;
@@ -355,7 +381,7 @@
   function renderAuto() {
     const d = last; const p = d.place;
     let html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`);
-    html += renderScore(d.result, d.todos, d.auto);
+    html += renderScore(d.result, d.todos, d.auto, d.answers);
     if (d.supplement && d.supplement.length) {
       html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
     }
@@ -364,7 +390,7 @@
     html += kwSection(d.keywords);
     html += draftSection(d);
     $('#auto-result').innerHTML = html;
-    const rb = $('#refresh'); if (rb) rb.addEventListener('click', () => runCheck(true), { once: true });
+    bindRefresh(d);
     bindSup(d, {});
   }
   function bindSup(d, prev) {
@@ -376,8 +402,9 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span></div></div>`) + renderScore(result, S.pickTodos(result), auto) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
+      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span><span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderScore(result, S.pickTodos(result), auto, merged) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
+      bindRefresh(d);
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
     }, { once: true });
   }
@@ -386,7 +413,7 @@
   $('#self-go').addEventListener('click', () => {
     const answers = readAnswers($('#self-form'), 'self_');
     const result = S.computeScore(answers, { asOf: today() });
-    $('#self-result').innerHTML = renderScore(result, S.pickTodos(result), null) + `<p class="notice">이 점수는 사장님이 직접 답한 내용의 집계입니다. 저희가 네이버에서 확인한 값이 아닙니다.</p>`;
+    $('#self-result').innerHTML = renderScore(result, S.pickTodos(result), null, answers) + `<p class="notice">이 점수는 사장님이 직접 답한 내용의 집계입니다. 저희가 네이버에서 확인한 값이 아닙니다.</p>`;
     $('#self-result').scrollIntoView({ behavior:'smooth' });
   });
   $('#kw-go').addEventListener('click', () => {

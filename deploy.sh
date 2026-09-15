@@ -8,8 +8,10 @@ DIR="$HOME/place-check"
 echo "== 1) Node 22 설치"
 if ! command -v node >/dev/null || [ "$(node -v | cut -c2-3)" -lt 22 ]; then
   curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-  sudo apt-get install -y nodejs git
+  sudo apt-get install -y nodejs
 fi
+command -v git >/dev/null || sudo apt-get install -y git
+command -v npm >/dev/null || { echo '!! npm 없음'; exit 2; }
 node -v
 
 echo "== 2) 네이버 접근 확인 (이 VM의 IP로 pcmap이 열리는지)"
@@ -30,6 +32,7 @@ After=network.target
 [Service]
 WorkingDirectory=$DIR
 Environment=PORT=80
+Environment=TZ=Asia/Seoul
 ExecStart=$(command -v node) server.js
 Restart=always
 RestartSec=3
@@ -38,8 +41,9 @@ User=root
 WantedBy=multi-user.target
 EOF
 sudo systemctl daemon-reload
-sudo systemctl enable --now place-check
+sudo systemctl enable place-check
+sudo systemctl restart place-check  # 재실행 배포도 새 코드로
 sleep 2
-sudo systemctl --no-pager --lines=5 status place-check || true
+sudo systemctl is-active --quiet place-check || { sudo journalctl -u place-check --no-pager --lines=20; echo '!! 서비스가 뜨지 않았습니다'; exit 3; }
 echo "== 완료. 브라우저에서 http://$(curl -s ifconfig.me 2>/dev/null || echo '<VM 공인 IP>') 접속"
 echo "   키 넣은 뒤 재시작: sudo systemctl restart place-check   / 로그: sudo journalctl -u place-check -f"
