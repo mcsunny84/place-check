@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>플레이스 체크 현황</title>
+<link rel="stylesheet" href="/shared.css">
+<style>body{padding:20px;max-width:720px;margin:0 auto;font-family:system-ui,sans-serif}h1{font-size:20px;margin:0 0 6px}table{border-collapse:collapse;width:100%;margin-top:8px}td,th{border-bottom:1px solid #e5e5e5;padding:6px 4px;text-align:left;font-size:14px}th{color:#666;font-weight:500}.big{font-size:34px;font-weight:700;margin:6px 0}.muted{color:#777;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.box{border:1px solid #e5e5e5;border-radius:8px;padding:10px}</style></head>
+<body>
+<h1>플레이스 체크 현황</h1>
+<p class="muted" id="when"></p>
+<div id="out"><p class="muted">불러오는 중…</p></div>
+<script>
+(async () => {
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const out = document.getElementById('out');
+  try {
+    const r = await fetch('/api/stats/coupons?token=' + encodeURIComponent(token));
+    if (r.status === 404) { out.innerHTML = '<p>주소의 token이 틀렸거나 빠졌어요.</p>'; return; }
+    const d = await r.json();
+    document.getElementById('when').textContent = new Date().toLocaleString('ko-KR') + ' 기준 · 새로 분석된 매장 수(24시간 내 재조회는 제외)';
+    const cats = Object.entries(d.byCategory || {}).sort((a, b) => b[1].stores - a[1].stores);
+    const kinds = Object.entries(d.byKind || {}).sort((a, b) => b[1] - a[1]);
+    out.innerHTML = `<div class="grid"><div class="box"><div class="muted">분석 매장</div><div class="big">${d.stores}</div></div><div class="box"><div class="muted">쿠폰 있음</div><div class="big">${d.withCoupon}</div></div><div class="box"><div class="muted">알림받기 쿠폰</div><div class="big">${d.withNotification}</div></div></div>`
+      + `<h3>업종별</h3><table><tr><th>업종</th><th>매장</th><th>쿠폰 있음</th></tr>${cats.map(([c, v]) => `<tr><td>${c}</td><td>${v.stores}</td><td>${v.withCoupon}</td></tr>`).join('')}</table>`
+      + `<h3>쿠폰 종류별(매장 수)</h3><table>${kinds.map(([k, n]) => `<tr><td>${k}</td><td>${n}</td></tr>`).join('')}</table>`
+      + `<h3>자주 쓰는 쿠폰 이름</h3><table>${(d.topTitles || []).slice(0, 15).map((t) => `<tr><td>${t.title.replace(/[<>&]/g, '')}</td><td>${t.n}</td></tr>`).join('')}</table>`
+      + `<p class="muted">기록 ${d.records}줄 · 멤버십 연결 ${d.withMembership}곳</p>`;
+  } catch (e) { out.innerHTML = '<p>불러오지 못했어요: ' + String(e.message) + '</p>'; }
+})();
+</script>
+</body></html>
