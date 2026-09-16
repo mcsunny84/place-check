@@ -64,7 +64,7 @@ test('D3 검출 우선: 소식 missing이어도 설명에 위반 문구 있으�
 test('같은 수집분 동시 요청 → 분석(LLM) 1회 공유, 실패한 필드는 기존 성공값 안 지움', async () => {
   const s = srv.state; s.adEnv = {}; s.llm = null; s.llmDescription = null;
   for (const f of fs.readdirSync(srv.CACHE_DIR)) fs.unlinkSync(path.join(srv.CACHE_DIR, f));
-  const facts = { placeId: V('42'), name: V('n'), fetched_at: '2026-09-15T00:00:00.000Z', roadAddress: V('서울 종로구 x'), category: V('돈가스') };
+  const facts = { placeId: V('42'), name: V('n'), fetched_at: new Date().toISOString(), roadAddress: V('서울 종로구 x'), category: V('돈가스') };
   srv.writeCache('42', facts);
   let calls = 0; s.llmKeywords = async () => { calls += 1; await new Promise((r) => setTimeout(r, 20)); return { keywords: [{ keyword: '종로 돈가스', why: 'a' }], diagnosis: [] }; };
   const [a, b] = await Promise.all([srv.buildResponse(facts, '2026-09-15', 0), srv.buildResponse(facts, '2026-09-15', 1)]);
