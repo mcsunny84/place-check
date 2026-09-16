@@ -17,7 +17,12 @@
     document.getElementById('when').textContent = new Date().toLocaleString('ko-KR') + ' 기준 · 새로 분석된 매장 수(24시간 내 재조회는 제외)';
     const cats = Object.entries(d.byCategory || {}).sort((a, b) => b[1].stores - a[1].stores);
     const kinds = Object.entries(d.byKind || {}).sort((a, b) => b[1] - a[1]);
+    const dayRows = Object.entries(d.days || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    const seenP = new Set(); const recent = (d.recent || []).filter((r) => { if (seenP.has(r.placeId)) return false; seenP.add(r.placeId); return true; });
+    const hhmm = (ts) => { const t = new Date(ts); return `${String(t.getMonth() + 1)}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; };
     out.innerHTML = `<div class="grid"><div class="box"><div class="muted">분석 매장</div><div class="big">${d.stores}</div></div><div class="box"><div class="muted">쿠폰 있음</div><div class="big">${d.withCoupon}</div></div><div class="box"><div class="muted">알림받기 쿠폰</div><div class="big">${d.withNotification}</div></div></div>`
+      + `<h3>일별 이용</h3><p class="muted">방문자 = 하루 안 서로 다른 접속(IP 기준, 같은 사람이 와이파이·LTE 바꾸면 2로 셈)</p><table><tr><th>날짜</th><th>방문자</th><th>페이지 열람</th><th>검사 요청</th><th>새 매장</th><th>캐시 재조회</th><th>실패</th></tr>${dayRows.map(([day, v]) => `<tr><td>${day}</td><td>${v.visitors}</td><td>${v.views}</td><td>${v.checks}</td><td>${v.fresh}</td><td>${v.cache}</td><td>${Object.entries(v.fallback || {}).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}</td></tr>`).join('')}</table>`
+      + `<h3>최근 분석 매장</h3><table><tr><th>시각</th><th>매장</th><th>지역·업종</th><th>점수</th><th>리뷰</th><th>쿠폰</th></tr>${recent.map((r) => `<tr><td>${hhmm(r.ts)}</td><td>${String(r.name || '').replace(/[<>&]/g, '')}</td><td class="muted">${r.district || ''} ${String(r.category || '').replace(/[<>&]/g, '')}</td><td>${r.score ?? '-'}</td><td>${r.reviews ?? '-'}</td><td>${r.coupons}${r.notify ? ' (알림)' : ''}</td></tr>`).join('')}</table>`
       + `<h3>업종별</h3><table><tr><th>업종</th><th>매장</th><th>쿠폰 있음</th></tr>${cats.map(([c, v]) => `<tr><td>${c}</td><td>${v.stores}</td><td>${v.withCoupon}</td></tr>`).join('')}</table>`
       + `<h3>쿠폰 종류별(매장 수)</h3><table>${kinds.map(([k, n]) => `<tr><td>${k}</td><td>${n}</td></tr>`).join('')}</table>`
       + `<h3>자주 쓰는 쿠폰 이름</h3><table>${(d.topTitles || []).slice(0, 15).map((t) => `<tr><td>${t.title.replace(/[<>&]/g, '')}</td><td>${t.n}</td></tr>`).join('')}</table>`

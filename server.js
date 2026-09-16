@@ -45,6 +45,22 @@ const GQL_REVIEWS = 'query getVisitorReviews($input: VisitorReviewsInput) { visi
 
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
+const HITS_FILE = path.join(path.dirname(STATS_FILE), 'hits.json');
+
+// 일별 이용 집계(개인정보 없음): 페이지 열람·검사 요청·캐시 hit·폴백 사유, 방문자는 IP 해시 앞 10자로 하루 단위 유일 수만
+function bump(kind, ip) {
+  try {
+    let h = {}; try { h = JSON.parse(fs.readFileSync(HITS_FILE, 'utf8')); } catch { /* 없음 */ }
+    const day = kstDate(state.now());
+    const d = h[day] = h[day] || { views: 0, checks: 0, cache: 0, fallback: {}, visitors: [] };
+    if (kind === 'views') d.views += 1;
+    else if (kind === 'checks') d.checks += 1;
+    else if (kind === 'cache') d.cache += 1;
+    else if (kind.startsWith('fallback:')) { const r = kind.slice(9); d.fallback[r] = (d.fallback[r] || 0) + 1; }
+    if (ip) { const id = require('node:crypto').createHash('sha256').update(String(ip)).digest('hex').slice(0, 10); if (!d.visitors.includes(id)) d.visitors.push(id); }
+    fs.writeFileSync(HITS_FILE, JSON.stringify(h));
+  } catch { /* 집계 실패 무시 */ }
+}
 
 // ---------- 상태 ----------
 const state = {
@@ -395,6 +411,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
 function serveStatic(req, res) {
   let p = req.url.split('?')[0];
   if (p === '/') p = '/index.html';
+  if (p === '/index.html') bump('views', (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim());
   const file = p.startsWith('/lib/') ? path.join(LIB, p.slice(5)) : path.join(PUBLIC, p);
   if (!file.startsWith(PUBLIC) && !file.startsWith(LIB)) return send(res, 404, 'not found', 'text/plain');
   fs.readFile(file, (err, buf) => {
@@ -410,14 +427,15 @@ async function handleCheck(req, res, body) {
   let input;
   try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { mode: 'fallback', reason: 'bad_request' }); }
   const parsed = parsePlaceUrl(String(input.url || ''));
-  if (!parsed.ok) return send(res, 200, { mode: 'fallback', reason: parsed.reason });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  bump('checks', ip);
+  if (!parsed.ok) { bump('fallback:' + parsed.reason); return send(res, 200, { mode: 'fallback', reason: parsed.reason }); }
   const asOf = kstDate(state.now());
   const refresh = input.refresh === true;
   // 캐시 hit — 쿨다운·IP 한도 무관. refresh면 10분 이내 수집분만 재사용(그보다 오래됐으면 새로 읽음)
   if (!parsed.needsResolve) {
     const cached = readCache(parsed.placeId, refresh ? REFRESH_MIN_MS : CACHE_TTL_MS);
-    if (cached) { const out = await buildResponse(cached, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
+    if (cached) { bump('cache'); const out = await buildResponse(cached, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
   }
   if (inCooldown()) {
     // 만료 여부는 inCooldown이 판단. 여기 왔다면 아직 쿨다운 중
@@ -443,8 +461,8 @@ async function handleCheck(req, res, body) {
     job.waiters.push(cb);
     pump();
   });
-  if (!payload) return send(res, 200, { mode: 'fallback', reason: 'timeout' });
-  if (payload.mode === 'fallback') return send(res, 200, payload);
+  if (!payload) { bump('fallback:timeout'); return send(res, 200, { mode: 'fallback', reason: 'timeout' }); }
+  if (payload.mode === 'fallback') { bump('fallback:' + payload.reason); return send(res, 200, payload); }
   return send(res, 200, await buildResponse(payload.facts, asOf, position));
 }
 
@@ -461,7 +479,13 @@ function createServer() {
       if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) return send(res, 404, 'not found', 'text/plain');
       let lines = [];
       try { lines = fs.readFileSync(STATS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }); } catch { /* 없음 */ }
-      return send(res, 200, { file: STATS_FILE, records: lines.length, ...CP.aggregate(lines) });
+      let hits = {}; try { hits = JSON.parse(fs.readFileSync(HITS_FILE, 'utf8')); } catch { /* 없음 */ }
+      const days = {};
+      for (const [day, d] of Object.entries(hits)) days[day] = { views: d.views, checks: d.checks, cache: d.cache, visitors: (d.visitors || []).length, fallback: d.fallback, fresh: 0 };
+      const seen = new Set();
+      for (const l of lines.filter(Boolean)) { const day = String(l.ts || '').slice(0, 10); if (!seen.has(l.placeId)) { seen.add(l.placeId); days[day] = days[day] || { views: 0, checks: 0, cache: 0, visitors: 0, fallback: {}, fresh: 0 }; days[day].fresh += 1; } }
+      const recent = lines.filter(Boolean).slice(-200).reverse().map((l) => ({ ts: l.ts, name: l.name, district: l.district, category: l.category, score: l.score, reviews: l.visitorReviewsTotal, coupons: l.couponCount, notify: l.hasNotification, placeId: l.placeId }));
+      return send(res, 200, { file: STATS_FILE, records: lines.length, ...CP.aggregate(lines), days, recent });
     }
     if (req.method === 'GET') return serveStatic(req, res);
     send(res, 405, 'method not allowed', 'text/plain');
