@@ -21,6 +21,7 @@ const KL = require('./lib/keyword-llm');
 const DA = require('./lib/draft-analysis');
 const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
+const U = require('./lib/usage');
 
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
@@ -485,7 +486,7 @@ function createServer() {
       const seen = new Set();
       for (const l of lines.filter(Boolean)) { const day = String(l.ts || '').slice(0, 10); if (!seen.has(l.placeId)) { seen.add(l.placeId); days[day] = days[day] || { views: 0, checks: 0, cache: 0, visitors: 0, fallback: {}, fresh: 0 }; days[day].fresh += 1; } }
       const recent = lines.filter(Boolean).slice(-200).reverse().map((l) => ({ ts: l.ts, name: l.name, district: l.district, category: l.category, score: l.score, reviews: l.visitorReviewsTotal, coupons: l.couponCount, notify: l.hasNotification, placeId: l.placeId }));
-      return send(res, 200, { file: STATS_FILE, records: lines.length, ...CP.aggregate(lines), days, recent });
+      return send(res, 200, { file: STATS_FILE, records: lines.length, ...CP.aggregate(lines), days, recent, llm: U.aggregate() });
     }
     if (req.method === 'GET') return serveStatic(req, res);
     send(res, 405, 'method not allowed', 'text/plain');
