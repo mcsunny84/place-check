@@ -107,3 +107,9 @@ test('menuForKeyword — 세트 조합·옵션 괄호 제거, 의미 괄호 보�
   assert.equal(K.menuForKeyword('브리스킷 듀오 플래터(2인)'), '브리스킷 듀오 플래터');
   assert.equal(K.menuForKeyword('카레(비건)'), '카레(비건)');
 });
+
+test('diagnoseKeywords — 동(지번)과 구를 둘 다 지역으로 본다', () => {
+  const c = { name: '키세카츠 신논현점', district: '역삼동', areas: ['강남구'], station: '신논현', category: '돈가스', menus: [] };
+  const r = K.diagnoseKeywords(['역삼돈까스', '강남역돈까스', '신논현돈까스'], c);
+  assert.deepEqual(r.map((x) => x.labels), [['좋아요'], ['좋아요'], ['좋아요']]);
+});

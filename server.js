@@ -103,7 +103,7 @@ const state = {
 const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const cachePath = (id) => path.join(CACHE_DIR, `${id}.json`);
 
-const CACHE_SCHEMA = 2; // facts 구조가 바뀌면 올린다(구 캐시 무시) — 2: coupons 필드 추가
+const CACHE_SCHEMA = 3; // facts 구조가 바뀌면 올린다(구 캐시 무시) — 2: coupons 필드 추가, 3: placeMenus 메뉴·jibunAddress
 function readCache(placeId, maxAge = CACHE_TTL_MS) {
   try {
     const j = JSON.parse(fs.readFileSync(cachePath(placeId), 'utf8'));
@@ -338,7 +338,9 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
   const v = (o) => (o && o.status === 'value' ? o.value : null);
   const { answers, auto } = factsToAnswers(facts, { asOf });
   const result = S.computeScore(answers, { asOf });
-  const district = K.extractDistrict(v(facts.roadAddress) || '');
+  const gu = K.extractDistrict(v(facts.roadAddress) || '');
+  const district = K.extractDistrict(v(facts.jibunAddress) || '') || gu; // 동 우선(지번), 없으면 구
+  const areas = gu && gu !== district ? [gu] : [];
   const station = (v(facts.subwayStations) || [])[0] || null;
   const cat = K.normalizeCategory(v(facts.category) || '');
   const menus = (v(facts.menus) || []);
@@ -352,7 +354,7 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
   if (conv.includes('주차')) situations.push('주차');
   const existing = v(facts.keywords) || [];
   const reviewMenus = ((v(facts.reviewStats) || {}).menus || []).slice(0, 5).map((m) => m.name).filter((n) => n && n.length >= 2 && !/^(고기|맥주|생맥주|술|밥|물|음식)$/.test(n));
-  const kctx = { name: v(facts.name), district, station, category: v(facts.category) || '', menus: kwMenus, reviewMenus };
+  const kctx = { name: v(facts.name), district, areas, station, category: v(facts.category) || '', menus: kwMenus, reviewMenus };
   const keywords = {
     current: existing,
     diagnosis: K.diagnoseKeywords(existing, kctx),

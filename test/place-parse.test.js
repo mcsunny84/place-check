@@ -179,3 +179,17 @@ test('parseFeed: feeds 키 없음 + 홈 hasFeed=false → 소식 0건 확정(emp
   const g = P2.parseFeed('<html><script>window.__APOLLO_STATE__={"ROOT_QUERY":{"__typename":"Query"}}</script></html>', { hasFeed: { status: 'value', value: true } });
   assert.equal(g.feeds.status, 'missing');
 });
+
+test('parseHome kise-sinnonhyeon: 새 메뉴 구조(placeMenus)·매일 영업·지번 주소', () => {
+  const f = parseHome(fx('kise-sinnonhyeon-home'), { now: '2026-11-02T00:00:00Z' });
+  assert.strictEqual(val(f.placeId), '2099352367');
+  const menus = val(f.menus);
+  assert.strictEqual(menus.length, 46);
+  assert.strictEqual(menus.filter((m) => m.recommend).length, 7);
+  assert.strictEqual(menus[0].name, '히레카츠 + 면요리세트(우동/소바)');
+  assert.deepStrictEqual(menus[0].price, { status: 'value', value: '19900' });
+  assert.deepStrictEqual(menus[0].images, { status: 'value', value: 2 });
+  assert.strictEqual(menus[45].order, 45);
+  assert.deepStrictEqual(val(f.businessHours).map((d) => d.day), ['매일']);
+  assert.strictEqual(val(f.jibunAddress), '서울 강남구 역삼동 810-13');
+});

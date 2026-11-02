@@ -269,3 +269,13 @@ test('실측 픽스처 (lib/place-parse.js 있을 때만)', { skip: !fs.existsSy
   const r = computeScore(answers, { asOf: AS });
   assert.ok(r.coverage >= 0.5, 'coverage ' + r.coverage);
 });
+
+test('A2·A3: 매일·평일·주말 같은 묶음 요일을 실제 요일 수로 센다', () => {
+  const brk = (d) => ({ ...day(d), breaks: [{ start: '16:00', end: '17:00' }] });
+  assert.equal(raw({ hideBusinessHours: V(false), businessHours: V([brk('매일')]) }, 'A2'), 'all');
+  assert.equal(raw({ hideBusinessHours: V(false), businessHours: V([day('평일'), day('주말')]) }, 'A2'), 'all');
+  assert.equal(raw({ hideBusinessHours: V(false), businessHours: V([day('평일'), day('토')]) }, 'A2'), 'some');
+  assert.equal(st({ hideBusinessHours: V(false), businessHours: V([day('매일')]) }, 'A3'), 'na'); // 매일 영업·휴게 없음 ≠ 정기휴무
+  assert.equal(st({ hideBusinessHours: V(false), businessHours: V([day('평일')]) }, 'A3'), 'pass'); // 주말 빠짐 = 정기휴무
+  assert.equal(st({ hideBusinessHours: V(false), businessHours: V([brk('매일')]) }, 'A3'), 'pass');
+});
