@@ -47,6 +47,23 @@ const GQL_REVIEWS = 'query getVisitorReviews($input: VisitorReviewsInput) { visi
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 fs.mkdirSync(path.dirname(STATS_FILE), { recursive: true });
 const HITS_FILE = path.join(path.dirname(STATS_FILE), 'hits.json');
+const ANSWERS_FILE = path.join(path.dirname(STATS_FILE), 'answers.jsonl');
+const ANSWERS_MAX_BYTES = 20 * 1024 * 1024; // ponytail: 넘으면 저장 중단, 회전은 실제로 찰 때 추가
+const ANSWER_IP_LIMIT = 20; // 저장 / 60초
+const YN = ['yes', 'no'];
+const ANSWER_ENUM = { A1: YN, A2: ['all', 'some', 'no'], A3: ['yes', 'no', 'na'], A4: YN, B3: ['price', 'menu_only', 'none'], B4: YN, B7: YN, C1: ['on', 'off', 'na'], C2: YN, C3: YN, C4: YN, D3: ['clean', 'flagged'] };
+const ANSWER_NUM = { B1: 9999, B2: 5, B5: 9999 };
+const ANSWER_DATE = ['B6', 'D1', 'D2'];
+
+// 자유 입력이 파일에 들어가지 않도록 허용 항목·값만 통과(개인정보 차단). 형식이 틀린 항목은 버린다.
+function cleanAnswers(raw) {
+  const out = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [id, values] of Object.entries(ANSWER_ENUM)) if (values.includes(raw[id])) out[id] = raw[id];
+  for (const [id, max] of Object.entries(ANSWER_NUM)) if (/^\d{1,4}$/.test(String(raw[id])) && Number(raw[id]) <= max) out[id] = Number(raw[id]);
+  for (const id of ANSWER_DATE) if (raw[id] === 'none' || /^\d{4}-\d{2}-\d{2}$/.test(String(raw[id]))) out[id] = raw[id];
+  return out;
+}
 
 // 일별 이용 집계(개인정보 없음): 페이지 열람·검사 요청·캐시 hit·폴백 사유, 방문자는 IP 해시 앞 10자로 하루 단위 유일 수만
 function bump(kind, ip) {
@@ -72,6 +89,7 @@ const state = {
   running: false,
   lastFetchStart: 0,
   ipLog: new Map(),      // ip -> [epoch ms]
+  answerIpLog: new Map(), // 답변 저장용(검사 한도와 분리)
   fetchImpl: globalThis.fetch,
   llm: undefined,          // review-insight LLM 호출 함수(테스트 주입); undefined = ANTHROPIC_API_KEY 있으면 실제 호출
   llmKeywords: undefined,  // keyword-llm 주입용(동일 규칙)
@@ -110,12 +128,12 @@ function startCooldown() {
   state.queue.length = 0;
 }
 
-function ipAllowed(ip) {
+function ipAllowed(ip, log = state.ipLog, limit = IP_LIMIT) {
   const t = state.now();
-  const arr = (state.ipLog.get(ip) || []).filter((x) => t - x < 60_000);
-  state.ipLog.set(ip, arr);
-  if (state.ipLog.size > 1000) for (const [k, a] of state.ipLog) if (!a.some((x) => t - x < 60_000)) state.ipLog.delete(k); // 만료 IP 정리
-  if (arr.length >= IP_LIMIT) return false;
+  const arr = (log.get(ip) || []).filter((x) => t - x < 60_000);
+  log.set(ip, arr);
+  if (log.size > 1000) for (const [k, a] of log) if (!a.some((x) => t - x < 60_000)) log.delete(k); // 만료 IP 정리
+  if (arr.length >= limit) return false;
   arr.push(t);
   return true;
 }
@@ -467,17 +485,53 @@ async function handleCheck(req, res, body) {
   return send(res, 200, await buildResponse(payload.facts, asOf, position));
 }
 
+// 사용자 직접 입력 답변 저장. 매장명·점수는 클라이언트 값을 믿지 않고 서버 캐시·채점으로 채운다.
+function handleAnswers(req, res, body) {
+  let input;
+  try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false }); }
+  const answers = cleanAnswers(input && input.answers);
+  if (!Object.keys(answers).length) return send(res, 400, { ok: false });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (!ipAllowed(ip, state.answerIpLog, ANSWER_IP_LIMIT)) return send(res, 429, { ok: false });
+  const placeId = /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
+  const facts = placeId && readCache(placeId);
+  const asOf = kstDate(state.now());
+  const auto = facts ? factsToAnswers(facts, { asOf }).answers : {};
+  const r = S.computeScore({ ...auto, ...answers }, { asOf });
+  const unscored = placeId && !facts; // 캐시 만료: 자동값 없이 채점하면 틀린 점수가 된다
+  const line = { ts: new Date(state.now()).toISOString(), placeId, name: facts && facts.name && facts.name.status === 'value' ? facts.name.value : null, answers, score: !unscored && r.display === 'score' ? r.score : null, grade: unscored ? null : r.grade };
+  try {
+    let size = 0; try { size = fs.statSync(ANSWERS_FILE).size; } catch { /* 없음 */ }
+    if (size >= ANSWERS_MAX_BYTES) return send(res, 507, { ok: false });
+    fs.appendFileSync(ANSWERS_FILE, JSON.stringify(line) + '\n');
+  } catch { return send(res, 500, { ok: false }); }
+  send(res, 200, { ok: true });
+}
+
+function adminOk(req) {
+  const token = new URL(req.url, 'http://x').searchParams.get('token');
+  return !!process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
+}
+
 function createServer() {
   return http.createServer((req, res) => {
-    if (req.method === 'POST' && req.url === '/api/check') {
+    if (req.method === 'POST' && (req.url === '/api/check' || req.url === '/api/answers')) {
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
-      req.on('end', () => handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) })));
+      req.on('end', () => {
+        if (req.url === '/api/answers') return handleAnswers(req, res, body);
+        handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) }));
+      });
       return;
     }
+    if (req.method === 'GET' && req.url.startsWith('/api/stats/answers')) {
+      if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
+      let lines = [];
+      try { lines = fs.readFileSync(ANSWERS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { /* 없음 */ }
+      return send(res, 200, { records: lines.length, recent: lines.slice(-200).reverse() });
+    }
     if (req.method === 'GET' && req.url.startsWith('/api/stats/coupons')) {
-      const token = new URL(req.url, 'http://x').searchParams.get('token');
-      if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) return send(res, 404, 'not found', 'text/plain');
+      if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
       let lines = [];
       try { lines = fs.readFileSync(STATS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }); } catch { /* 없음 */ }
       let hits = {}; try { hits = JSON.parse(fs.readFileSync(HITS_FILE, 'utf8')); } catch { /* 없음 */ }

@@ -6,6 +6,8 @@
 <h1>플레이스 체크 현황</h1>
 <p class="muted" id="when"></p>
 <div id="out"><p class="muted">불러오는 중…</p></div>
+<div id="answers"></div>
+<script src="/lib/place-scoring.js"></script>
 <script>
 (async () => {
   const token = new URLSearchParams(location.search).get('token') || '';
@@ -37,6 +39,11 @@
       + `<h3>쿠폰 종류별(매장 수)</h3><table>${kinds.map(([k, n]) => `<tr><td>${k}</td><td>${n}</td></tr>`).join('')}</table>`
       + `<h3>자주 쓰는 쿠폰 이름</h3><table>${(d.topTitles || []).slice(0, 15).map((t) => `<tr><td>${t.title.replace(/[<>&]/g, '')}</td><td>${t.n}</td></tr>`).join('')}</table>`
       + `<p class="muted">기록 ${d.records}줄 · 멤버십 연결 ${d.withMembership}곳</p>`;
+    const a = await (await fetch('/api/stats/answers?token=' + encodeURIComponent(token))).json();
+    const ko = { yes: '예', no: '아니오', all: '전부', some: '일부만', na: '해당 없음', price: '가격 포함', menu_only: '메뉴만', none: '없음', on: '켬', off: '끔', clean: '주의 표현 없음', flagged: '주의 표현 있음' };
+    const label = (id) => (PlaceScoring.ITEMS.find((x) => x.id === id) || {}).label || id;
+    const answerRows = a.recent.map((r) => `<tr><td>${hhmm(r.ts)}</td><td>${String(r.name || (r.placeId ? r.placeId : '직접 체크')).replace(/[<>&]/g, '')}</td><td class="muted">${Object.entries(r.answers).map(([id, v]) => `${id} ${label(id)}: <b>${ko[v] || v}</b>`).join('<br>')}</td><td>${r.score ?? r.grade ?? '-'}</td></tr>`).join('');
+    document.getElementById('answers').innerHTML = `<h3>최근 답변 (${a.records}건)</h3><p class="muted">사장님이 직접 입력한 답변, 최근 200건</p><table><tr><th>시각</th><th>매장</th><th>항목별 답변</th><th>점수</th></tr>${answerRows}</table>`;
   } catch (e) { out.innerHTML = '<p>불러오지 못했어요: ' + String(e.message) + '</p>'; }
 })();
 </script>

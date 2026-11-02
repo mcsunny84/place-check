@@ -66,6 +66,10 @@ docs/                     기획·코덱스 교차검증 기록 (02→06 수렴�
 
 검사된 매장마다 쿠폰 현황(제목·조건 종류·알림받기 여부, 개인정보 없음)을 `data/stats/coupons.jsonl`에 한 줄씩 남긴다. 집계는 `npm run stats`(로컬 `.env`의 `ADMIN_TOKEN`으로 운영 서버 `/api/stats/coupons` 조회).
 
+## 사용자 답변 저장
+
+직접 체크·보충 질문 답변을 `data/stats/answers.jsonl`에 한 줄씩 남긴다. 허용 항목·값만 저장하고(자유 입력 불가), IP는 남기지 않으며, D3 원문은 브라우저에서 판정값(`clean`/`flagged`)으로만 보낸다. 조회는 `admin.html`의 최근 답변 표 또는 `/api/stats/answers?token=ADMIN_TOKEN`.
+
 ## 운영 한계
 
 - 처리량 상한 약 800매장/시(매장당 fetch 3회 × 1.5초). 폭주 시 대기 90초 넘는 요청은 "직접 체크" 폴백.

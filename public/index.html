@@ -104,9 +104,10 @@
   <section id="tab-self" hidden>
     <p class="kicker">직접 체크</p>
     <h1 class="hero">스마트플레이스를 <em>옆에 켜두고</em> 답해 주세요.</h1>
-    <p class="sub">네이버에서 정보를 못 읽어올 때(또는 직접 하고 싶을 때) 쓰는 방식입니다. 답은 서버에 저장되지 않습니다.</p>
+    <p class="sub">네이버에서 정보를 못 읽어올 때(또는 직접 하고 싶을 때) 쓰는 방식입니다.</p>
 
     <form id="self-form" style="margin-top: 32px;"></form>
+    <p class="notice" id="self-save-note"></p>
     <div class="actions"><button class="go" id="self-go" type="button">점수 보기</button></div>
     <div id="self-result"></div>
 
@@ -155,7 +156,7 @@
       <h3>점수는 어떻게 매기나요</h3>
       <p>기본정보 20점, 콘텐츠 40점, 기능 15점, 평판 운영 25점으로 100점입니다. 자동으로 읽지 못한 항목은 감점하지 않고 "확인 안 됨"으로 두며, 답해 주시면 바로 반영됩니다.</p>
       <h3>무엇을 저장하나요</h3>
-      <p>가게의 공개 정보는 하루 동안만 보관해, 같은 가게를 다시 검사할 때 씁니다. 사장님이 입력한 답은 저장하지 않습니다.</p>
+      <p>가게의 공개 정보는 하루 동안만 보관해, 같은 가게를 다시 검사할 때 씁니다. "점수 보기"나 "다시 계산"을 누르면 입력한 답과 점수를 서비스 개선을 위해 저장합니다. 이 기록에는 이름·연락처·접속 IP 같은 개인정보를 넣지 않으며, 붙여넣은 상세설명·소식 원문은 서버로 보내지 않고 주의 표현 유무만 저장합니다.</p>
       <h3>만든 사람</h3>
       <p>저도 식당 사장입니다.<br>키세카츠(신사·안국·신논현)와 택산가든(경주)을 운영하면서 직접 쓰려고 만든 도구를 그대로 나눕니다.</p>
       <p class="muted">궁금한 점이나 잘못된 부분은 <a href="mailto:olarefnc@gmail.com" style="text-decoration:underline">olarefnc@gmail.com</a>으로 알려 주세요.</p>
@@ -236,6 +237,15 @@
       else if (el.value !== '') a[id] = q.k === 'num' ? el.value : (id === 'B2' ? Number(el.value) : el.value);
     }
     return a;
+  }
+  const SAVE_NOTE = '결과를 보면 입력한 답과 점수가 서비스 개선을 위해 저장됩니다. 개인정보는 저장하지 않고, 붙여넣은 원문은 서버로 보내지 않아요.';
+  $('#self-save-note').textContent = SAVE_NOTE;
+  // D3 원문은 브라우저 밖으로 내보내지 않고 판정값만 보낸다. 저장 실패는 화면에 영향 없음.
+  function saveAnswers(answers, placeId) {
+    const a = Object.assign({}, answers);
+    if (a.D3 && typeof a.D3 === 'object') a.D3 = S.judge('D3', a.D3) === 'fail' ? 'flagged' : 'clean';
+    if (!Object.keys(a).length) return;
+    fetch('/api/answers', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ placeId, answers: a }) }).catch(() => {});
   }
 
   // 셀프 폼 렌더
@@ -383,7 +393,7 @@
     let html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`);
     html += renderScore(d.result, d.todos, d.auto, d.answers);
     if (d.supplement && d.supplement.length) {
-      html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
+      html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
     }
     html += renderCoupons(d.coupons);
     html += renderInsight(d.insight);
@@ -398,6 +408,7 @@
     const p = d.place;
     sg.addEventListener('click', () => {
       const extra = readAnswers($('#sup-form'), 'sup_');
+      saveAnswers(extra, p.id);
       const merged = Object.assign({}, d.answers, extra);
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
@@ -412,6 +423,7 @@
   // ---------- 셀프 체크 ----------
   $('#self-go').addEventListener('click', () => {
     const answers = readAnswers($('#self-form'), 'self_');
+    saveAnswers(answers, null);
     const result = S.computeScore(answers, { asOf: today() });
     $('#self-result').innerHTML = renderScore(result, S.pickTodos(result), null, answers) + `<p class="notice">이 점수는 사장님이 직접 답한 내용의 집계입니다. 저희가 네이버에서 확인한 값이 아닙니다.</p>`;
     $('#self-result').scrollIntoView({ behavior:'smooth' });

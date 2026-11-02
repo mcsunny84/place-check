@@ -214,6 +214,59 @@ test('검색광고 키 있으면 월 검색수 조회·정렬·캐시', async ()
   srv.state.llmKeywords = null; srv.state.adEnv = {}; srv.state.fetchAd = undefined;
 });
 
+async function withServer(fn) {
+  const server = srv.createServer();
+  await new Promise((r) => server.listen(0, r));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try { await fn(base); } finally { server.close(); server.closeAllConnections(); }
+}
+const postAnswers = (base, body) => fetch(base + '/api/answers', { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body) });
+const ANSWERS_FILE = path.join(path.dirname(process.env.PLACE_STATS_FILE), 'answers.jsonl');
+const answerLines = () => fs.readFileSync(ANSWERS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+
+test('답변 저장: 허용 항목만 기록, 자유 입력·IP 없음, 매장명·점수는 서버가 채움', async () => {
+  resetState(); fakeFetch(okPlan); srv.state.answerIpLog.clear();
+  await req(URL1);
+  await withServer(async (base) => {
+    const r = await postAnswers(base, { placeId: '2086785604', answers: { A3: 'yes', B5: '23', D1: 'none', D3: { text: '010-1234-5678 홍길동' }, name: '홍길동', A1: '010-1234-5678', B6: '내일쯤' }, score: 100 });
+    assert.equal(r.status, 200);
+  });
+  const [l] = answerLines();
+  assert.deepEqual(l.answers, { A3: 'yes', B5: 23, D1: 'none' });
+  assert.equal(l.name, '키세카츠 안국역점');
+  assert.ok(Number.isInteger(l.score), '클라이언트 score 100 무시, 서버 채점'); assert.notEqual(l.score, 100);
+  assert.ok(!/010|홍길동|내일쯤|1\.1\.1\.1|127\.0\.0\.1/.test(JSON.stringify(l)), '자유 입력·IP 미저장');
+});
+
+test('답변 저장: 직접 체크는 매장 없이 서버 채점, 빈 답·깨진 JSON·초과 본문 거부, IP 한도', async () => {
+  resetState(); srv.state.answerIpLog.clear();
+  await withServer(async (base) => {
+    assert.equal((await postAnswers(base, { answers: { A1: 'yes', D3: 'flagged' } })).status, 200);
+    assert.equal((await postAnswers(base, { answers: { A1: '홍길동' } })).status, 400);
+    assert.equal((await postAnswers(base, '{깨짐')).status, 400);
+    await assert.rejects(postAnswers(base, { answers: { A1: 'yes' }, pad: 'x'.repeat(5000) }), '4KB 초과는 연결 차단');
+    const [l] = answerLines();
+    assert.equal(l.placeId, null); assert.equal(l.name, null); assert.equal(l.answers.D3, 'flagged');
+    for (let i = 0; i < 19; i++) await postAnswers(base, { answers: { A1: 'yes' } });
+    assert.equal((await postAnswers(base, { answers: { A1: 'yes' } })).status, 429);
+  });
+});
+
+test('답변 조회: ADMIN_TOKEN 없거나 틀리면 404, 맞으면 최신순', async () => {
+  resetState(); srv.state.answerIpLog.clear();
+  await withServer(async (base) => {
+    await postAnswers(base, { answers: { A1: 'yes' } }); await postAnswers(base, { answers: { A1: 'no' } });
+    delete process.env.ADMIN_TOKEN;
+    assert.equal((await fetch(base + '/api/stats/answers?token=undefined')).status, 404, '토큰 미설정');
+    process.env.ADMIN_TOKEN = 't0k';
+    assert.equal((await fetch(base + '/api/stats/answers')).status, 404);
+    assert.equal((await fetch(base + '/api/stats/answers?token=wrong')).status, 404);
+    const j = await (await fetch(base + '/api/stats/answers?token=t0k')).json();
+    assert.equal(j.records, 2); assert.equal(j.recent[0].answers.A1, 'no');
+    delete process.env.ADMIN_TOKEN;
+  });
+});
+
 test('쿠폰 백데이터: 신규 수집 시 1줄 기록, 캐시 hit는 기록 없음, 관리자 집계 API', async () => {
   resetState(); fakeFetch(okPlan);
   try { fs.unlinkSync(process.env.PLACE_STATS_FILE); } catch {}
