@@ -264,12 +264,12 @@
     <p class="sub" style="max-width:none">플레이스 공개 페이지를 읽어 사장님이 직접 채울 수 있는 항목이 얼마나 채워졌는지 점수로 보여주는 무료 도구입니다.</p>
     <div class="card about" style="margin-top: 32px;">
       <h3>무엇을 하나요</h3>
-      <p>플레이스 주소 하나로 <b>18개 항목</b>을 점검하고, 이번 주에 먼저 할 일 3가지를 골라 줍니다. 리뷰를 읽어 손님이 꼽은 장점과 보완할 점을 정리하고, 대표키워드와 상세설명도 함께 봅니다.</p>
-      <p>순위나 매출을 예측하거나 보장하지 않습니다. 점수는 "얼마나 채웠는가"이지 "얼마나 노출되는가"가 아닙니다.</p>
+      <p>플레이스 주소 하나로 리뷰·대표키워드·상세설명·소식·사진·예약까지 <b>7개 영역</b>을 점검하고, 점수를 가장 많이 올릴 일 3가지를 골라 줍니다. 리뷰를 읽어 손님이 꼽은 장점과 보완할 점을 정리하고, 대표키워드와 상세설명도 함께 봅니다.</p>
+      <p>순위나 매출을 예측하거나 보장하지 않습니다. 점수는 "얼마나 잘 운영하는가"를 보는 것이지 "얼마나 노출되는가"가 아닙니다.</p>
       <h3>점수는 어떻게 매기나요</h3>
-      <p>기본정보 20점, 콘텐츠 40점, 기능 15점, 평판 운영 25점으로 100점입니다. 자동으로 읽지 못한 항목은 감점하지 않고 "확인 안 됨"으로 두며, 답해 주시면 바로 반영됩니다.</p>
+      <p>리뷰 30점, 대표키워드 18점, 상세설명 17점, 최신성(소식) 10점, 사진·메뉴 10점, 손님 행동 장치(예약·톡톡·쿠폰) 10점, 기본 정보 5점으로 100점입니다. 등록만 해서는 60점 안팎이고, 답글·소식·키워드까지 운영해야 75점(A)을 넘습니다. 자동으로 읽지 못한 항목은 감점하지 않고 계산에서 뺍니다.</p>
       <h3>무엇을 저장하나요</h3>
-      <p>가게의 공개 정보는 하루 동안만 보관해, 같은 가게를 다시 검사할 때 씁니다. "점수 보기"나 "다시 계산"을 누르면 입력한 답과 점수를 서비스 개선을 위해 저장합니다. 이 기록에는 이름·연락처·접속 IP 같은 개인정보를 넣지 않으며, 붙여넣은 상세설명·소식 원문은 서버로 보내지 않고 주의 표현 유무만 저장합니다.</p>
+      <p>가게의 공개 정보는 하루 동안만 보관해, 같은 가게를 다시 검사할 때 씁니다. "점수 보기"나 "다시 계산"을 누르면 입력한 답과 점수를 서비스 개선을 위해 저장합니다. 이 기록에는 이름·연락처·접속 IP 같은 개인정보를 넣지 않으며, 붙여넣은 상세설명·소식 원문은 서버로 보내지 않고 주의 표현 유무만 저장합니다.</p><p>상담을 신청하면 그때만 이름·전화·이메일(선택)을 따로 보관합니다. 상담 연락에만 쓰고, 상담이 끝나고 1년 뒤 지우며, 요청하면 바로 지웁니다.</p>
       <h3>만든 사람</h3>
       <p>저도 식당 사장입니다.<br>키세카츠(신사·안국·신논현)와 택산가든(경주)을 운영하면서 직접 쓰려고 만든 도구를 그대로 나눕니다.</p>
       <p class="muted">궁금한 점이나 잘못된 부분은 <a href="mailto:olarefnc@gmail.com" style="text-decoration:underline">olarefnc@gmail.com</a>으로 알려 주세요.</p>
@@ -445,11 +445,12 @@
       const cand = [...((kw.llm && kw.llm.keywords) || []), ...(kw.recommendations || [])].filter((k) => k && k.keyword && (k.volume || 0) >= 100 && !(kw.current || []).includes(k.keyword));
       const uniq = [...new Map(cand.map((k) => [k.keyword.replace(/\s+/g, ''), k])).values()].slice(0, 2);
       const bad = (kw.diagnosis || []).filter((x) => !x.labels.includes('좋아요')).map((x) => x.keyword);
-      return { t: '이렇게 바꾸세요', body: `${bad.length ? `<div>빼기: <b>${esc(bad.slice(0, 2).join('</b>, <b>'))}</b>${bad.length > 2 ? ` 외 ${bad.length - 2}개` : ''}</div>` : ''}${uniq.length ? `<div>넣기: ${uniq.map((k) => `<b>${esc(k.keyword)}</b>${fmtVol(k.volume)}`).join(', ')}</div>` : ''}`, more: '나머지 키워드 조합과 등록 순서는 리포트에서 전화로 설명드려요.' };
+      return { t: '이렇게 바꾸세요', body: `${bad.length ? `<div>빼기: ${bad.slice(0, 2).map((k) => `<b>${esc(k)}</b>`).join(', ')}${bad.length > 2 ? ` 외 ${bad.length - 2}개` : ''}</div>` : ''}${uniq.length ? `<div>넣기: ${uniq.map((k) => `<b>${esc(k.keyword)}</b>${fmtVol(k.volume)}`).join(', ')}</div>` : ''}`, more: '나머지 키워드 조합과 등록 순서는 리포트에서 전화로 설명드려요.' };
     }
     if (id === 'R4') {
-      const s = (ins.llm && ins.llm.strengths && ins.llm.strengths[0]) || (ins.strengths && ins.strengths[0] && ins.strengths[0].text) || '';
-      return { t: '답글 예시 1개', body: `"방문해 주셔서 감사합니다. ${esc(String(s).replace(/[.。]$/, ''))}${s ? '라고 ' : ''}말씀해 주신 부분, 직원들과 함께 봤어요. 다음에도 같은 마음으로 준비하겠습니다."`, more: '밀린 리뷰 전체 답글 초안은 리포트와 함께 드려요.' };
+      // 투표 키워드("음식이 맛있어요")가 인용하기 자연스럽다 — AI 요약 문장은 답글에 넣으면 어색해서 쓰지 않는다
+      const s = (ins.strengths && ins.strengths[0] && ins.strengths[0].text) || '';
+      return { t: '답글 예시 1개', body: `"방문해 주셔서 감사합니다. ${s ? `'${esc(String(s).replace(/[.。]$/, ''))}' 해 주신 말씀, ` : ''}직원들과 함께 봤어요. 다음에도 같은 마음으로 준비하겠습니다."`, more: '밀린 리뷰 전체 답글 초안은 리포트와 함께 드려요.' };
     }
     if (id === 'F1' || id === 'F2') {
       const c = d.coupons && d.coupons.coupons && d.coupons.coupons[0];
@@ -460,7 +461,7 @@
       if (add) return { t: '추가할 Q&A 1개', body: `<b>Q. ${esc(add.q)}</b><br>A. ${esc(add.a)}`, more: '나머지 Q&A와 완성 원고는 리포트에서.' };
       return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: null };
     }
-    if (id === 'R3') return { t: '영수증 리뷰 안내 문구', body: '"리뷰에 드신 메뉴와 사진 한 장만 남겨 주세요. 다음 방문 때 에비후라이 하나 더 드려요." — 테이블 안내판·영수증에.', more: null };
+    if (id === 'R3') return { t: '영수증 리뷰 안내 문구', body: '"리뷰를 남겨 주신다면 드신 메뉴 이름과 사진 한 장을 같이 적어 주세요. 다른 손님이 메뉴 고를 때 큰 도움이 돼요." — 테이블 안내판·영수증에.', more: '리뷰 대가(서비스·할인)를 걸면 네이버 정책 위반이라 넣지 않았어요.' };
     if (id === 'M1' || id === 'M2' || id === 'M3') return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: '사진 구성(메뉴·내부·외부·단체석)은 리포트에서.' };
     if (id === 'C3') return { t: '쿠폰 하나 만들기', body: '조건 "알림받기" + 혜택 원가 낮고 체감 큰 것(음료 1잔, 사이드 1개). 구독 손님 명단이 쌓여요.', more: null };
     return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: null };
@@ -480,16 +481,19 @@
     const head = `<div class="store"><h2>${esc(p.name)}</h2><span class="meta">${esc(p.category || '')} · ${esc(p.district || '')} · ${esc(kst(p.fetched_at).slice(0, 16))} 읽음</span></div>
 <div class="card" style="margin-top:12px"><div class="sum">${V.gauge(r.score, r.grade, bench)}<div><p class="lead">${lead}${top.length ? ` 아래 ${top.length}가지만 하면 <b>${projected}점</b>까지 올라요.` : ''}</p><p class="sub2">7개 영역 100점. 등록만으론 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.</p><div class="pillrow">${pills}</div></div></div></div>`;
     const acts = top.map((t, i) => { const s = sampleFor(t, d); const it = (r.items || []).find((x) => x.id === t.id) || {};
-      return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(it.why || '')}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div><div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div></div>`; }).join('');
+      return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(shortWhy(it))}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div><div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div></div>`; }).join('');
     const actsHtml = top.length ? `<h2 class="h">지금 할 일 ${top.length}가지</h2><p class="hsub">효과 큰 순서예요. 각각 "이렇게 바꾸세요" 샘플을 넣어 뒀어요.</p><div class="acts">${acts}</div>` : '';
     return head + actsHtml + (opts.report ? renderReportContact(d) : renderLeadForm(d));
   }
+  // 할 일 카드의 근거는 한 줄로 — 키워드처럼 긴 근거는 아래 샘플이 대신한다
+  const shortWhy = (it) => { const w = String(it.why || ''); if (it.id === 'K1') { const n = (w.match(/(\d)\/5칸/) || [])[1]; const g = (w.match(/규칙 통과/g) || []).length; if (n) return `등록 ${n}칸 중 ${g}칸만 지역+업종 조합이에요`; }
+    return w.length > 80 ? w.slice(0, 80) + '…' : w; };
   function renderLeadForm(d) {
     return `<div class="cta" id="cta"><h2>이 결과를 리포트로 정리해서,<br>전화로 설명해 드릴게요.</h2><p>마케팅 랩이 가게에 맞춰 키워드 세트·상세설명 원고·답글 방향까지 짚어 드려요. 무료이고, 필요하면 방문 상담으로 이어져요.</p>
 <div class="steps"><div><b>1</b>무료 진단 (지금)</div><div><b>2</b>리포트 링크 + 전화 설명</div><div><b>3</b>방문 상담</div><div><b>4</b>필요한 것만 계약</div></div>
 <form id="lead-form"><div><label class="f" style="color:#c9d0d9">이름</label><input class="f" name="name" required maxlength="30" placeholder="홍길동" autocomplete="name"></div><div><label class="f" style="color:#c9d0d9">전화</label><input class="f" name="phone" required inputmode="tel" placeholder="010-1234-5678" autocomplete="tel"></div><div class="full"><label class="f" style="color:#c9d0d9">이메일 (선택)</label><input class="f" name="email" type="email" placeholder="리포트를 메일로도 받고 싶으면" autocomplete="email"></div>
-<label class="chk full"><input type="checkbox" name="consent" required> 상담 연락을 위해 이름·전화·이메일을 보관하는 데 동의해요. 상담 외 용도로 쓰지 않고, 요청하면 바로 지워요.</label>
-<div class="full"><button class="go" type="submit">리포트 받고 전화 상담 신청</button><p class="err2" id="lead-err"></p><p class="mini">보통 1~2일 안에 ${esc(d.place.name)} 담당으로 연락드려요. 전화가 부담되면 이메일만 남기셔도 돼요.</p></div></form></div>`;
+<label class="chk full"><input type="checkbox" name="consent" required> (필수) 상담 연락을 위해 이름·전화·이메일(선택)을 받아요. 상담 외 용도로 쓰지 않고, 상담이 끝나고 1년 뒤 지워요(요청하면 바로). 동의하지 않아도 진단 결과는 그대로 볼 수 있어요.</label>
+<div class="full"><button class="go" type="submit">리포트 받고 전화 상담 신청</button><p class="err2" id="lead-err"></p><p class="mini">보통 1~2일 안에 ${esc(d.place.name)} 담당으로 연락드려요.</p></div></form></div>`;
   }
   function renderReportContact(d) {
     return `<div class="cta"><h2>이 리포트는 마케팅 랩이 보내 드린 거예요.</h2><p>궁금한 점은 보내 드린 번호로 바로 전화 주시거나 <a href="mailto:olarefnc@gmail.com" style="color:#fff;text-decoration:underline">olarefnc@gmail.com</a>으로 답장 주세요.</p></div>`;
