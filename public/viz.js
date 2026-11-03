@@ -23,12 +23,12 @@
     const R = 54, cx = 70, cy = 70, cw = 10, circ = 2 * Math.PI * R;
     const p = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100;
     const m = bench ? Math.max(0, Math.min(100, bench.median)) / 100 : null;
-    const gt = [45, 60, 75].map((g) => { const a = -Math.PI / 2 + (g / 100) * 2 * Math.PI; return `<line x1="${cx + (R + cw / 2 + 1) * Math.cos(a)}" y1="${cy + (R + cw / 2 + 1) * Math.sin(a)}" x2="${cx + (R + cw / 2 + 6) * Math.cos(a)}" y2="${cy + (R + cw / 2 + 6) * Math.sin(a)}" stroke="${C.faint}" stroke-width="1.5"><title>${g === 75 ? 'A' : g === 60 ? 'B' : 'C'}등급 ${g}점부터</title></line>`; }).join('');
-    const tick = m == null ? '' : (() => { const a = -Math.PI / 2 + m * 2 * Math.PI; const x1 = cx + (R - cw) * Math.cos(a), y1 = cy + (R - cw) * Math.sin(a), x2 = cx + (R + cw) * Math.cos(a), y2 = cy + (R + cw) * Math.sin(a); return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C.ink}" stroke-width="2" stroke-linecap="round"><title>같은 업종 중간값 ${bench.median}점</title></line>`; })();
+    // 업종 중간값: 링 위 작은 점(점수와 같으면 생략). 눈금·가로선은 깨져 보여서 뺐다(2026-11-03 태양 피드백)
+    const dot = (m == null || Math.abs(m - p) < 0.01) ? '' : (() => { const a = -Math.PI / 2 + m * 2 * Math.PI; return `<circle cx="${(cx + R * Math.cos(a)).toFixed(1)}" cy="${(cy + R * Math.sin(a)).toFixed(1)}" r="4" fill="${C.ink}" stroke="#fff" stroke-width="2"><title>같은 업종 중간값 ${bench.median}점</title></circle>`; })();
     return `<svg class="gauge" viewBox="0 0 140 140" width="140" height="140" role="img" aria-label="점수 ${score == null ? '없음' : score + '점'}${grade ? ' ' + grade + '등급' : ''}">
 <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${C.track}" stroke-width="${cw}"/>
 <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${C.accent}" stroke-width="${cw}" stroke-linecap="round" stroke-dasharray="${(p * circ).toFixed(1)} ${circ.toFixed(1)}" transform="rotate(-90 ${cx} ${cy})"/>
-${gt}${tick}
+${dot}
 <text x="${cx}" y="${cy + 4}" text-anchor="middle" font-size="40" font-weight="800" fill="${C.ink}" letter-spacing="-1">${score == null ? '—' : score}</text>
 <text x="${cx}" y="${cy + 26}" text-anchor="middle" font-size="13" font-weight="700" fill="${C.muted}">${grade ? grade + '등급' : '등급 없음'}</text>
 </svg>`;

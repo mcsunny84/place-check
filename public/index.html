@@ -282,7 +282,7 @@
 <script src="/lib/place-scoring.js"></script>
 <script src="/lib/keyword.js"></script>
 <script src="/lib/draft.js"></script>
-<script src="/viz.js?v=4"></script>
+<script src="/viz.js?v=5"></script>
 <script src="/lib/copy.js"></script>
 <script>
 (function(){
@@ -408,7 +408,7 @@
     const diff = r.score == null ? null : r.score - bench.median;
     const head = `<div class="hero2">${V.gauge(r.score, r.grade, bench)}<div>${r.score === null
       ? '<p class="num-note">읽은 정보가 부족해 점수를 내지 못했어요.</p>'
-      : `<p class="bench">같은 업종(${esc(bench.label)}) 중간값 <b>${bench.median}점</b> · ${diff === 0 ? '우리 가게는 <b>중간값과 같아요</b>' : `우리 가게는 <b>${Math.abs(diff)}점</b> ${diff > 0 ? '위' : '아래'}`}<br><span class="ax-max">게이지 바깥 눈금 = C 45 · B 60 · A 75, 안쪽 굵은 선 = 업종 중간값</span></p><p class="num-note">등록만 하면 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p>`}</div></div>`;
+      : `<p class="bench">같은 업종(${esc(bench.label)}) 중간값 <b>${bench.median}점</b> · ${diff === 0 ? '우리 가게는 <b>중간값과 같아요</b>' : `우리 가게는 <b>${Math.abs(diff)}점</b> ${diff > 0 ? '위' : '아래'}`}</p><p class="num-note">등록만 하면 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p>`}</div></div>`;
     const bars = V.axes(r.axes, axes);
     const top = r.todos.slice(0, 5);
     const ladder = top.length ? V.ladder(r, top) : '<p class="muted">올릴 점수가 거의 없어요. 지금처럼 운영하세요.</p>';
@@ -651,7 +651,6 @@
     if (d.keywords) html += acc('대표키워드', `${(d.keywords.current || []).length}개 등록`, kwSection(d.keywords));
     html += acc('상세설명 진단·제안', d.description && d.description.analysis ? `${d.description.analysis.length || 0}자` : '', draftSection(d));
     if (d.coupons) html += acc('쿠폰·알림받기', `${d.coupons.count}개`, renderCoupons(d.coupons));
-    html += acc('등록 체크리스트 (예전 방식 점수)', `${result.score ?? '—'}점 · 18항목`, renderScore(result, todos, auto, answers));
     if (!opts.report && d.supplement && d.supplement.length) {
       html += acc('자동으로 못 읽은 항목 직접 답하기', `${d.supplement.length}개`, `<form id="sup-form"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`);
     }
