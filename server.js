@@ -51,6 +51,9 @@ const HITS_FILE = path.join(path.dirname(STATS_FILE), 'hits.json');
 const ANSWERS_FILE = path.join(path.dirname(STATS_FILE), 'answers.jsonl');
 const ANSWERS_MAX_BYTES = 20 * 1024 * 1024; // ponytail: 넘으면 저장 중단, 회전은 실제로 찰 때 추가
 const ANSWER_IP_LIMIT = 20; // 저장 / 60초
+const LEADS_FILE = path.join(path.dirname(STATS_FILE), 'leads.jsonl');       // 상담 신청(이름·전화·이메일) — 관리자 전용
+const REPORTS_DIR = path.join(path.dirname(STATS_FILE), 'reports');          // 결과 스냅샷(공유 링크 /r/<token>)
+const LEAD_IP_LIMIT = 5; // 신청 / 60초
 const YN = ['yes', 'no'];
 const ANSWER_ENUM = { A1: YN, A2: ['all', 'some', 'no'], A3: ['yes', 'no', 'na'], A4: YN, B3: ['price', 'menu_only', 'none'], B4: YN, B7: YN, C1: ['on', 'off', 'na'], C2: YN, C3: YN, C4: YN, D3: ['clean', 'flagged'] };
 const ANSWER_NUM = { B1: 9999, B2: 5, B5: 9999 };
@@ -91,6 +94,7 @@ const state = {
   lastFetchStart: 0,
   ipLog: new Map(),      // ip -> [epoch ms]
   answerIpLog: new Map(), // 답변 저장용(검사 한도와 분리)
+  leadIpLog: new Map(),   // 상담 신청용
   fetchImpl: globalThis.fetch,
   llm: undefined,          // review-insight LLM 호출 함수(테스트 주입); undefined = ANTHROPIC_API_KEY 있으면 실제 호출
   llmKeywords: undefined,  // keyword-llm 주입용(동일 규칙)
@@ -513,6 +517,49 @@ function handleAnswers(req, res, body) {
   send(res, 200, { ok: true });
 }
 
+// 결과 스냅샷 → 공유 링크. 클라이언트 JSON을 믿지 않고 서버 캐시로 다시 조립해 저장한다(캐시 만료면 실패).
+async function makeReport(placeId, asOf) {
+  const facts = readCache(placeId);
+  if (!facts) return null;
+  const out = await buildResponse(facts, asOf, 0);
+  const token = require('node:crypto').randomBytes(8).toString('base64url');
+  fs.mkdirSync(REPORTS_DIR, { recursive: true });
+  const snap = { ...out, cache: undefined, report: { token, created_at: new Date(state.now()).toISOString() } };
+  fs.writeFileSync(path.join(REPORTS_DIR, token + '.json'), JSON.stringify(snap));
+  return { token, score: out.result_v2 && out.result_v2.score, grade: out.result_v2 && out.result_v2.grade, name: out.place.name, category: out.place.category, district: out.place.district };
+}
+function readReport(token) {
+  if (!/^[A-Za-z0-9_-]{8,16}$/.test(token)) return null;
+  try { return JSON.parse(fs.readFileSync(path.join(REPORTS_DIR, token + '.json'), 'utf8')); } catch { return null; }
+}
+async function handleShare(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false }); }
+  const placeId = /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
+  if (!placeId) return send(res, 400, { ok: false, reason: 'bad_request' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (!ipAllowed(ip, state.leadIpLog, LEAD_IP_LIMIT)) return send(res, 429, { ok: false, reason: 'ip_limit' });
+  const r = await makeReport(placeId, kstDate(state.now()));
+  if (!r) return send(res, 200, { ok: false, reason: 'expired' });
+  send(res, 200, { ok: true, token: r.token });
+}
+// 상담 신청: 이름·전화 필수, 이메일 선택. 개인정보는 leads.jsonl에만(관리자 토큰으로만 열람), 통계·캐시엔 안 섞음.
+async function handleLead(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false }); }
+  const name = String(input.name || '').trim().slice(0, 30);
+  const phone = String(input.phone || '').replace(/[^0-9]/g, '');
+  const email = String(input.email || '').trim().slice(0, 80);
+  const placeId = /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
+  if (!name || phone.length < 9 || phone.length > 11) return send(res, 400, { ok: false, reason: 'invalid' });
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return send(res, 400, { ok: false, reason: 'invalid_email' });
+  if (input.consent !== true) return send(res, 400, { ok: false, reason: 'consent' });
+  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  if (!ipAllowed(ip, state.leadIpLog, LEAD_IP_LIMIT)) return send(res, 429, { ok: false, reason: 'ip_limit' });
+  const r = placeId ? await makeReport(placeId, kstDate(state.now())) : null;
+  const line = { ts: new Date(state.now()).toISOString(), name, phone, email: email || null, placeId, store: r ? r.name : null, category: r ? r.category : null, district: r ? r.district : null, score: r ? r.score : null, grade: r ? r.grade : null, token: r ? r.token : null, memo: String(input.memo || '').trim().slice(0, 300) || null };
+  try { fs.appendFileSync(LEADS_FILE, JSON.stringify(line) + '\n'); } catch { return send(res, 500, { ok: false }); }
+  send(res, 200, { ok: true, token: r ? r.token : null });
+}
+
 function adminOk(req) {
   const token = new URL(req.url, 'http://x').searchParams.get('token');
   return !!process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
@@ -520,14 +567,27 @@ function adminOk(req) {
 
 function createServer() {
   return http.createServer((req, res) => {
-    if (req.method === 'POST' && (req.url === '/api/check' || req.url === '/api/answers')) {
+    if (req.method === 'POST' && (req.url === '/api/check' || req.url === '/api/answers' || req.url === '/api/lead' || req.url === '/api/share')) {
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
         if (req.url === '/api/answers') return handleAnswers(req, res, body);
+        if (req.url === '/api/lead') return handleLead(req, res, body).catch((e) => send(res, 500, { ok: false, detail: String(e.message) }));
+        if (req.url === '/api/share') return handleShare(req, res, body).catch((e) => send(res, 500, { ok: false, detail: String(e.message) }));
         handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) }));
       });
       return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/report/')) {
+      const snap = readReport(req.url.slice('/api/report/'.length).split('?')[0]);
+      return snap ? send(res, 200, snap) : send(res, 404, { ok: false, reason: 'not_found' });
+    }
+    if (req.method === 'GET' && req.url.startsWith('/r/')) { req.url = '/index.html'; return serveStatic(req, res); } // 리포트 모드(클라이언트가 경로로 판단)
+    if (req.method === 'GET' && req.url.startsWith('/api/stats/leads')) {
+      if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
+      let lines = [];
+      try { lines = fs.readFileSync(LEADS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { /* 없음 */ }
+      return send(res, 200, { records: lines.length, recent: lines.slice(-300).reverse() });
     }
     if (req.method === 'GET' && req.url.startsWith('/api/stats/answers')) {
       if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');

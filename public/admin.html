@@ -4,6 +4,7 @@
 <style>body{padding:20px;max-width:720px;margin:0 auto;font-family:system-ui,sans-serif}h1{font-size:20px;margin:0 0 6px}table{border-collapse:collapse;width:100%;margin-top:8px}td,th{border-bottom:1px solid #e5e5e5;padding:6px 4px;text-align:left;font-size:14px}th{color:#666;font-weight:500}.big{font-size:34px;font-weight:700;margin:6px 0}.muted{color:#777;font-size:13px}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}.box{border:1px solid #e5e5e5;border-radius:8px;padding:10px}</style></head>
 <body>
 <h1>플레이스 체크 현황</h1>
+<div id="leads"></div>
 <p class="muted" id="when"></p>
 <div id="out"><p class="muted">불러오는 중…</p></div>
 <div id="answers"></div>
@@ -13,6 +14,10 @@
   const token = new URLSearchParams(location.search).get('token') || '';
   const out = document.getElementById('out');
   try {
+    const L = await (await fetch('/api/stats/leads?token=' + encodeURIComponent(token))).json();
+    const tel = (p) => p.replace(/(\d{3})(\d{3,4})(\d{4})/, '$1-$2-$3');
+    const when = (ts) => { const t = new Date(ts); return `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; };
+    document.getElementById('leads').innerHTML = `<h3 style="margin-top:0">상담 신청 (${L.records}건)</h3><p class="muted">리포트 링크를 카톡으로 보내고 전화하세요. 링크는 로그인 없이 열립니다.</p><table><tr><th>시각</th><th>이름</th><th>전화</th><th>매장</th><th>점수</th><th>리포트</th></tr>${(L.recent || []).map((l) => `<tr><td>${when(l.ts)}</td><td>${String(l.name).replace(/[<>&]/g, '')}${l.email ? `<br><span class="muted">${String(l.email).replace(/[<>&]/g, '')}</span>` : ''}</td><td><a href="tel:${l.phone}">${tel(l.phone)}</a></td><td>${String(l.store || l.placeId || '').replace(/[<>&]/g, '')}<br><span class="muted">${l.district || ''} ${String(l.category || '').replace(/[<>&]/g, '')}</span></td><td>${l.score ?? '-'}${l.grade ? ' ' + l.grade : ''}</td><td>${l.token ? `<a href="/r/${l.token}" target="_blank">열기</a> · <button onclick="navigator.clipboard.writeText(location.origin + '/r/${l.token}').then(() => this.textContent = '복사됨')">링크 복사</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">아직 없음</td></tr>'}</table>`;
     const r = await fetch('/api/stats/coupons?token=' + encodeURIComponent(token));
     if (r.status === 404) { out.innerHTML = '<p>주소의 token이 틀렸거나 빠졌어요.</p>'; return; }
     const d = await r.json();

@@ -4,7 +4,7 @@
   'use strict';
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const n1 = (x) => (Math.round(x * 10) / 10).toString();
-  const C = { ink: 'var(--ink)', muted: 'var(--muted)', faint: 'var(--faint)', line: 'var(--line)', track: 'var(--paper-2)', accent: 'var(--accent)', ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--accent-ink)' };
+  const C = { ink: 'var(--ink)', muted: 'var(--muted)', faint: 'var(--faint)', line: 'var(--line)', track: 'var(--paper-2)', accent: 'var(--accent)', ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--bad)' };
 
   // 업종별 v2 중앙값 — 2026-11-03 라이브 138곳 시뮬레이션(docs/10). ponytail: 통계 파일에 scoreV2가 쌓이면 서버 집계로 교체
   const MEDIAN = { 요리주점: 53, 한식: 58, 중식당: 56, 이자카야: 61, 육류: 64, 양식: 69, 돈가스: 65, 곱창: 70, 일식당: 63, 카페: 66, 생선회: 52 };

@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>플레이스 체크</title>
-<link rel="stylesheet" href="/shared.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="/shared.css?v=4">
 <style>
   /* 이 페이지 전용 — 공용 토큰·컴포넌트는 shared.css */
   section[hidden] { display: none; }
@@ -13,8 +14,8 @@
   .hint { color: var(--muted); font-size: 13px; margin-top: 6px; word-break: keep-all; }
   .err { color: var(--accent-ink); font-size: 15px; font-weight: 700; }
   .actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
-  select.f { width: 100%; background: #fff; color: var(--ink); border: 1px solid var(--line); border-bottom-color: #b9bbb2; padding: 11px 12px; font-size: 15px; font-family: var(--font-sans); outline: none; border-radius: 0; }
-  select.f:focus { border-color: var(--ink); }
+  select.f { width: 100%; background: var(--paper-2); color: var(--ink); border: 1.5px solid transparent; padding: 13px 14px; font-size: 16px; font-family: var(--font-sans); outline: none; border-radius: var(--radius-s); }
+  select.f:focus { border-color: var(--accent); background: #fff; }
   textarea.f { min-height: 90px; resize: vertical; }
   .chk { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap; }
   .chk + .chk { margin-left: 14px; }
@@ -104,6 +105,73 @@
     .hb-row { grid-template-columns: 1fr 70px auto; } .hb-row .ax-bar { grid-column: 1 / -1; order: 3; }
   }
   .q:first-child { margin-top: 0; }
+  /* ---- 결과: 요약 레이어 ---- */
+  .store { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+  .store h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+  .store .meta { font-size: 13px; color: var(--muted); }
+  .sum { display: grid; grid-template-columns: 160px 1fr; gap: 16px 28px; align-items: center; }
+  .sum .lead { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.4; word-break: keep-all; }
+  .sum .lead b { color: var(--accent); }
+  .sum .sub2 { font-size: 14px; color: var(--muted); margin-top: 8px; word-break: keep-all; }
+  .pillrow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .pill { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--paper-2); color: var(--muted); }
+  .pill.good { background: var(--ok-bg); color: var(--ok); } .pill.mid { background: var(--warn-bg); color: var(--warn); } .pill.bad { background: var(--bad-bg); color: var(--bad); }
+  h2.h { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 36px 0 4px; }
+  p.hsub { font-size: 14px; color: var(--muted); margin-bottom: 14px; word-break: keep-all; }
+  .acts { display: grid; gap: 12px; }
+  .act { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px 24px; display: grid; grid-template-columns: 44px 1fr auto; gap: 6px 16px; align-items: start; }
+  .act .n { width: 44px; height: 44px; border-radius: 14px; background: var(--accent-bg); color: var(--accent-ink); font-weight: 800; font-size: 18px; display: grid; place-items: center; }
+  .act h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; word-break: keep-all; }
+  .act .why { font-size: 14px; color: var(--muted); margin-top: 2px; word-break: keep-all; }
+  .act .gain { text-align: right; font-size: 24px; font-weight: 800; color: var(--ok); white-space: nowrap; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .act .gain small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .act .fix { grid-column: 2 / -1; margin-top: 10px; background: var(--paper-2); border-radius: var(--radius-s); padding: 12px 14px; font-size: 14px; word-break: keep-all; }
+  .act .fix .t { font-size: 12px; font-weight: 700; color: var(--accent-ink); margin-bottom: 4px; }
+  .act .fix .more { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .act .fix ul { margin: 4px 0 0 18px; padding: 0; } .act .fix li { margin: 2px 0; }
+  /* 상담 신청 */
+  .cta { background: var(--ink); color: #fff; border-radius: var(--radius); padding: 28px 24px; margin-top: 32px; }
+  .cta h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.35; word-break: keep-all; }
+  .cta p { color: #c9d0d9; font-size: 14px; margin-top: 8px; word-break: keep-all; }
+  .cta .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 18px 0 20px; }
+  .cta .steps div { background: rgba(255,255,255,.08); border-radius: var(--radius-s); padding: 10px 12px; font-size: 13px; color: #e6eaf0; }
+  .cta .steps b { display: block; font-size: 12px; color: #8b95a1; margin-bottom: 2px; }
+  .cta form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cta form .full { grid-column: 1 / -1; }
+  .cta input.f { background: rgba(255,255,255,.1); color: #fff; border-color: transparent; }
+  .cta input.f::placeholder { color: #8b95a1; } .cta input.f:focus { background: rgba(255,255,255,.16); border-color: #fff; }
+  .cta label.chk { color: #c9d0d9; font-size: 13px; white-space: normal; align-items: flex-start; gap: 8px; }
+  .cta button.go { width: 100%; font-size: 17px; padding: 16px; }
+  .cta .done { text-align: center; padding: 10px 0; }
+  .cta .done .big { font-size: 22px; font-weight: 800; }
+  .cta .err2 { color: #ffb4b4; font-size: 13px; }
+  .cta .mini { font-size: 12px; color: #8b95a1; margin-top: 10px; }
+  /* 자세히 보기 아코디언 */
+  details.acc { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); margin-top: 12px; }
+  details.acc > summary { list-style: none; cursor: pointer; padding: 18px 24px; display: flex; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+  details.acc > summary::-webkit-details-marker { display: none; }
+  details.acc > summary .hint2 { margin-left: auto; font-size: 13px; color: var(--muted); font-weight: 500; white-space: nowrap; }
+  details.acc > summary .chev { width: 20px; height: 20px; flex: none; color: var(--faint); transition: transform 180ms ease-out; }
+  details.acc[open] > summary .chev { transform: rotate(180deg); }
+  details.acc > .body { padding: 0 24px 24px; }
+  details.acc .sec-head { display: none; }
+  details.acc .card { box-shadow: none; padding: 0; border-radius: 0; }
+  details.acc .card + .card { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+  details.acc section.res { margin-top: 0; }
+  .report-head { background: var(--accent-bg); border-radius: var(--radius); padding: 16px 20px; font-size: 14px; color: var(--accent-ink); margin-top: 24px; word-break: keep-all; }
+  .report-head b { color: var(--ink); }
+  .topact { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  @media (max-width: 760px) {
+    .sum { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .pillrow { justify-content: center; }
+    .act { grid-template-columns: 36px 1fr; padding: 18px; }
+    .act .n { width: 36px; height: 36px; font-size: 16px; border-radius: 11px; }
+    .act .gain { grid-column: 2; text-align: left; margin-top: 2px; font-size: 20px; }
+    .act .fix { grid-column: 1 / -1; }
+    .cta .steps { grid-template-columns: 1fr 1fr; }
+    .cta form { grid-template-columns: 1fr; }
+    details.acc > summary { padding: 16px 18px; font-size: 16px; } details.acc > .body { padding: 0 18px 18px; }
+  }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes s { to { transform: rotate(360deg); } }
   .about p { margin-top: 8px; word-break: keep-all; }
@@ -130,9 +198,9 @@
   </div>
 
   <section id="tab-auto">
-    <p class="kicker">네이버 플레이스 채움 진단</p>
-    <h1 class="hero">우리 가게 플레이스, <em>얼마나 채워져</em> 있을까?</h1>
-    <p class="sub">주소만 붙여넣으면 점검·키워드 추천·소개글 초안까지.<br>순위를 예측하는 게 아니라 "채움 정도"를 봅니다.</p>
+    <p class="kicker">네이버 플레이스 무료 진단</p>
+    <h1 class="hero">우리 가게 플레이스, <em>지금 몇 점</em>일까요?</h1>
+    <p class="sub">주소만 붙여넣으면 1분 안에 점수·할 일 3가지·키워드·리뷰 분석까지. 같은 식당 사장이 만들었어요.</p>
 
     <div class="card" style="margin-top: 32px;">
       <label class="f" for="url">플레이스 주소</label>
@@ -208,13 +276,13 @@
     </div>
   </section>
 
-  <p class="footer-note">플레이스 체크 v1.2 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</p>
+  <p class="footer-note">플레이스 체크 v2 · 마케팅 랩 · 이 점수는 공개 페이지에서 읽은 값과 사장님이 답한 내용의 집계입니다.</p>
 </div>
 
 <script src="/lib/place-scoring.js"></script>
 <script src="/lib/keyword.js"></script>
 <script src="/lib/draft.js"></script>
-<script src="/viz.js?v=3"></script>
+<script src="/viz.js?v=4"></script>
 <script src="/lib/copy.js"></script>
 <script>
 (function(){
@@ -365,6 +433,82 @@
     return renderScoreV2(d.result_v2, d.place && d.place.category) + `<details class="card" style="margin-top:14px"><summary class="muted">등록 체크리스트(기본 18항목, 채움 여부만 보는 예전 점수 ${result.score ?? '—'}점) 보기</summary>${renderScore(result, todos, auto, answers)}</details>`;
   }
 
+  // ---------- 요약 레이어: 점수 한 줄 + 할 일 3개(+샘플) + 상담 신청 ----------
+  const CHEV = '<svg class="chev" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l5 5 5-5"/></svg>';
+  const acc = (title, hint, body, open) => `<details class="acc"${open ? ' open' : ''}><summary>${esc(title)}<span class="hint2">${esc(hint || '')}</span>${CHEV}</summary><div class="body">${body}</div></details>`;
+  const fmtVol = (v) => (v == null ? '' : ` <span class="muted">월 ${v.toLocaleString('ko-KR')}회</span>`);
+  // 할 일별 "이렇게 바꾸세요" 샘플 — 이미 읽은 데이터로만 만든다. 없으면 next 문구.
+  function sampleFor(t, d) {
+    const r = d.result_v2 || {}; const kw = d.keywords || {}; const ins = d.insight || {}; const desc = d.description || {};
+    const id = t.id;
+    if (id === 'K1') {
+      const cand = [...((kw.llm && kw.llm.keywords) || []), ...(kw.recommendations || [])].filter((k) => k && k.keyword && (k.volume || 0) >= 100 && !(kw.current || []).includes(k.keyword));
+      const uniq = [...new Map(cand.map((k) => [k.keyword.replace(/\s+/g, ''), k])).values()].slice(0, 2);
+      const bad = (kw.diagnosis || []).filter((x) => !x.labels.includes('좋아요')).map((x) => x.keyword);
+      return { t: '이렇게 바꾸세요', body: `${bad.length ? `<div>빼기: <b>${esc(bad.slice(0, 2).join('</b>, <b>'))}</b>${bad.length > 2 ? ` 외 ${bad.length - 2}개` : ''}</div>` : ''}${uniq.length ? `<div>넣기: ${uniq.map((k) => `<b>${esc(k.keyword)}</b>${fmtVol(k.volume)}`).join(', ')}</div>` : ''}`, more: '나머지 키워드 조합과 등록 순서는 리포트에서 전화로 설명드려요.' };
+    }
+    if (id === 'R4') {
+      const s = (ins.llm && ins.llm.strengths && ins.llm.strengths[0]) || (ins.strengths && ins.strengths[0] && ins.strengths[0].text) || '';
+      return { t: '답글 예시 1개', body: `"방문해 주셔서 감사합니다. ${esc(String(s).replace(/[.。]$/, ''))}${s ? '라고 ' : ''}말씀해 주신 부분, 직원들과 함께 봤어요. 다음에도 같은 마음으로 준비하겠습니다."`, more: '밀린 리뷰 전체 답글 초안은 리포트와 함께 드려요.' };
+    }
+    if (id === 'F1' || id === 'F2') {
+      const c = d.coupons && d.coupons.coupons && d.coupons.coupons[0];
+      return { t: '이번 주 소식 주제 1개', body: c ? `<b>"${esc(c.title)}"</b> 쿠폰을 소식으로 한 번 더 알리기 — 사진 1장 + 두 줄.` : `대표 메뉴 사진 1장 + 두 줄("요즘 많이 찾는 ○○, 이렇게 준비해요"). 월 1회가 기준이에요.`, more: '4주 소식 달력은 리포트에서.' };
+    }
+    if (id === 'T2' || id === 'T3' || id === 'T1' || id === 'T4' || id === 'T5') {
+      const add = (desc.llm && desc.llm.add && desc.llm.add[0]) || (desc.analysis && desc.analysis.add && desc.analysis.add[0]);
+      if (add) return { t: '추가할 Q&A 1개', body: `<b>Q. ${esc(add.q)}</b><br>A. ${esc(add.a)}`, more: '나머지 Q&A와 완성 원고는 리포트에서.' };
+      return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: null };
+    }
+    if (id === 'R3') return { t: '영수증 리뷰 안내 문구', body: '"리뷰에 드신 메뉴와 사진 한 장만 남겨 주세요. 다음 방문 때 에비후라이 하나 더 드려요." — 테이블 안내판·영수증에.', more: null };
+    if (id === 'M1' || id === 'M2' || id === 'M3') return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: '사진 구성(메뉴·내부·외부·단체석)은 리포트에서.' };
+    if (id === 'C3') return { t: '쿠폰 하나 만들기', body: '조건 "알림받기" + 혜택 원가 낮고 체감 큰 것(음료 1잔, 사이드 1개). 구독 손님 명단이 쌓여요.', more: null };
+    return { t: '이렇게 바꾸세요', body: esc(t.next || ''), more: null };
+  }
+  function renderSummary(d, opts = {}) {
+    const V = window.PlaceViz; const r = d.result_v2; const p = d.place;
+    const bench = V.benchmark(p.category); const diff = r.score == null ? null : r.score - bench.median;
+    const top = (r.todos || []).slice(0, 3);
+    const gain = top.reduce((s, t) => s + t.lost, 0);
+    const known = Object.values(r.axes).reduce((s, x) => s + x.known, 0) || 100;
+    const earned = Object.values(r.axes).reduce((s, x) => s + x.earned, 0);
+    const projected = Math.min(100, Math.round(((earned + gain) / known) * 100));
+    const weak = AXIS_ORDER.filter((a) => r.axes[a]).map((a) => ({ a, x: r.axes[a], lv: V.level(r.axes[a].known ? r.axes[a].earned / r.axes[a].known : 0) }));
+    const pills = weak.map((w) => `<span class="pill ${w.lv.k}">${esc(w.x.label)} ${w.lv.t}</span>`).join('');
+    const lead = r.score == null ? '읽은 정보가 부족해 점수를 내지 못했어요.'
+      : diff === null ? '' : diff > 0 ? `같은 업종 중간(${bench.median}점)보다 <b>${diff}점 높아요</b>.` : diff < 0 ? `같은 업종 중간(${bench.median}점)보다 <b>${-diff}점 낮아요</b>.` : `같은 업종 중간값(${bench.median}점)과 같아요.`;
+    const head = `<div class="store"><h2>${esc(p.name)}</h2><span class="meta">${esc(p.category || '')} · ${esc(p.district || '')} · ${esc(kst(p.fetched_at).slice(0, 16))} 읽음</span></div>
+<div class="card" style="margin-top:12px"><div class="sum">${V.gauge(r.score, r.grade, bench)}<div><p class="lead">${lead}${top.length ? ` 아래 ${top.length}가지만 하면 <b>${projected}점</b>까지 올라요.` : ''}</p><p class="sub2">7개 영역 100점. 등록만으론 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.</p><div class="pillrow">${pills}</div></div></div></div>`;
+    const acts = top.map((t, i) => { const s = sampleFor(t, d); const it = (r.items || []).find((x) => x.id === t.id) || {};
+      return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(it.why || '')}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div><div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div></div>`; }).join('');
+    const actsHtml = top.length ? `<h2 class="h">지금 할 일 ${top.length}가지</h2><p class="hsub">효과 큰 순서예요. 각각 "이렇게 바꾸세요" 샘플을 넣어 뒀어요.</p><div class="acts">${acts}</div>` : '';
+    return head + actsHtml + (opts.report ? renderReportContact(d) : renderLeadForm(d));
+  }
+  function renderLeadForm(d) {
+    return `<div class="cta" id="cta"><h2>이 결과를 리포트로 정리해서,<br>전화로 설명해 드릴게요.</h2><p>마케팅 랩이 가게에 맞춰 키워드 세트·상세설명 원고·답글 방향까지 짚어 드려요. 무료이고, 필요하면 방문 상담으로 이어져요.</p>
+<div class="steps"><div><b>1</b>무료 진단 (지금)</div><div><b>2</b>리포트 링크 + 전화 설명</div><div><b>3</b>방문 상담</div><div><b>4</b>필요한 것만 계약</div></div>
+<form id="lead-form"><div><label class="f" style="color:#c9d0d9">이름</label><input class="f" name="name" required maxlength="30" placeholder="홍길동" autocomplete="name"></div><div><label class="f" style="color:#c9d0d9">전화</label><input class="f" name="phone" required inputmode="tel" placeholder="010-1234-5678" autocomplete="tel"></div><div class="full"><label class="f" style="color:#c9d0d9">이메일 (선택)</label><input class="f" name="email" type="email" placeholder="리포트를 메일로도 받고 싶으면" autocomplete="email"></div>
+<label class="chk full"><input type="checkbox" name="consent" required> 상담 연락을 위해 이름·전화·이메일을 보관하는 데 동의해요. 상담 외 용도로 쓰지 않고, 요청하면 바로 지워요.</label>
+<div class="full"><button class="go" type="submit">리포트 받고 전화 상담 신청</button><p class="err2" id="lead-err"></p><p class="mini">보통 1~2일 안에 ${esc(d.place.name)} 담당으로 연락드려요. 전화가 부담되면 이메일만 남기셔도 돼요.</p></div></form></div>`;
+  }
+  function renderReportContact(d) {
+    return `<div class="cta"><h2>이 리포트는 마케팅 랩이 보내 드린 거예요.</h2><p>궁금한 점은 보내 드린 번호로 바로 전화 주시거나 <a href="mailto:olarefnc@gmail.com" style="color:#fff;text-decoration:underline">olarefnc@gmail.com</a>으로 답장 주세요.</p></div>`;
+  }
+  function bindLead(d) {
+    const f = $('#lead-form'); if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = f.querySelector('button'); const err = $('#lead-err'); err.textContent = '';
+      const fd = new FormData(f);
+      const phone = String(fd.get('phone') || '').replace(/[^0-9]/g, '');
+      if (phone.length < 9 || phone.length > 11) { err.textContent = '전화번호를 다시 확인해 주세요.'; return; }
+      btn.disabled = true; btn.textContent = '보내는 중…';
+      let j; try { const res = await fetch('/api/lead', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: fd.get('name'), phone, email: fd.get('email'), consent: fd.get('consent') === 'on', placeId: d.place.id }) }); j = await res.json(); } catch { j = { ok: false }; }
+      if (!j.ok) { btn.disabled = false; btn.textContent = '리포트 받고 전화 상담 신청'; err.textContent = j.reason === 'ip_limit' ? '잠시 후 다시 시도해 주세요.' : j.reason === 'invalid_email' ? '이메일 주소를 확인해 주세요.' : '전송에 실패했어요. 잠시 후 다시 시도해 주세요.'; return; }
+      $('#cta').innerHTML = `<div class="done"><div class="big">신청 완료. 곧 연락드릴게요.</div><p>리포트 링크를 미리 열어 두셔도 돼요.</p>${j.token ? `<div class="topact" style="justify-content:center"><a class="ghost" style="display:inline-block;padding:10px 16px;border-radius:10px;background:rgba(255,255,255,.12);color:#fff" href="/r/${j.token}" target="_blank">리포트 열기</a><button class="ghost" style="background:rgba(255,255,255,.12);color:#fff" onclick="navigator.clipboard.writeText(location.origin+'/r/${j.token}').then(()=>this.textContent='복사됨')">링크 복사</button></div>` : ''}</div>`;
+    });
+  }
+
   function renderKeywordsLLM(l) {
     if (!l || !l.keywords || !l.keywords.length) return '';
     const volTag = (k) => (k.volume != null ? `<span class="tag${k.volume >= 100 ? ' good' : ''}">월 ${k.volume.toLocaleString('ko-KR')}회</span>` : '');
@@ -482,21 +626,58 @@
   function placeCard(p, note) {
     return `<div class="card" style="margin-top:14px"><div class="kv"><span class="k">업체</span><span><b>${esc(p.name)}</b></span><span class="k">분류·주소</span><span>${esc(p.category || '')} · ${esc(p.address || '')}</span>${note}</div>`;
   }
+  function renderDetails(d, result, todos, auto, answers, opts = {}) {
+    const r = d.result_v2; const V = window.PlaceViz;
+    let html = '';
+    if (r) {
+      const axes = AXIS_ORDER.filter((a) => r.axes[a]);
+      const top = (r.todos || []).slice(0, 5);
+      let items = '';
+      for (const a of axes) {
+        items += `<div class="grp">${esc(r.axes[a].label)} <span class="muted">${n1(r.axes[a].earned)}/${n1(r.axes[a].known)}</span></div>`;
+        for (const it of r.items.filter((x) => x.axis === a)) {
+          const cls = it.pts === null ? 'mute' : it.pts >= it.max ? 'good' : it.pts > 0 ? 'mid' : 'bad';
+          const lv = it.pts === null ? null : V.level(it.max ? it.pts / it.max : 0);
+          items += `<div class="item"><h4><span class="badge ${cls}">${it.pts === null ? '확인 안 됨' : `${n1(it.pts)}/${n1(it.max)}`}</span> ${esc(it.label)}</h4>${lv ? `<div class="it-bar"><i style="width:${Math.round((it.pts / it.max) * 100)}%;background:${lv.c}"></i></div>` : ''}<p class="muted">${esc(it.why)}</p>${it.next && it.pts !== null && it.pts < it.max ? `<p>${esc(it.next)}</p>` : ''}</div>`;
+        }
+      }
+      html += acc('점수 자세히', `${r.score ?? '—'}점 · 7영역`, `${V.axes(r.axes, axes)}<h4 class="sub-h" style="margin-top:20px">점수 올리는 순서 (상위 5)</h4>${top.length ? V.ladder(r, top) : ''}<h4 class="sub-h" style="margin-top:20px">항목별</h4>${items}`, false);
+    }
+    if (d.insight) html += acc('리뷰로 본 우리 가게', `${(d.insight.stats && d.insight.stats.totalCount) ?? '?'}건 · 평균 ${(d.insight.stats && d.insight.stats.avgRating) ?? '?'}`, renderInsight(d.insight));
+    if (d.keywords) html += acc('대표키워드', `${(d.keywords.current || []).length}개 등록`, kwSection(d.keywords));
+    html += acc('상세설명 진단·제안', d.description && d.description.analysis ? `${d.description.analysis.length || 0}자` : '', draftSection(d));
+    if (d.coupons) html += acc('쿠폰·알림받기', `${d.coupons.count}개`, renderCoupons(d.coupons));
+    html += acc('등록 체크리스트 (예전 방식 점수)', `${result.score ?? '—'}점 · 18항목`, renderScore(result, todos, auto, answers));
+    if (!opts.report && d.supplement && d.supplement.length) {
+      html += acc('자동으로 못 읽은 항목 직접 답하기', `${d.supplement.length}개`, `<form id="sup-form"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></form>`);
+    }
+    if (!opts.report) html += `<div class="topact" style="margin-top:16px">${refreshBtn(d)}</div>`;
+    return html;
+  }
   function renderAuto() {
     const d = last; const p = d.place;
-    let html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`);
-    html += renderAutoScore(d, d.result, d.todos, d.auto, d.answers);
-    if (d.supplement && d.supplement.length) {
-      html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
+    let html;
+    if (d.result_v2) html = renderSummary(d) + `<h2 class="h">자세히 보기</h2><p class="hsub">근거 숫자와 그래프예요. 필요한 것만 펼쳐 보세요.</p>` + renderDetails(d, d.result, d.todos, d.auto, d.answers);
+    else {
+      html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderAutoScore(d, d.result, d.todos, d.auto, d.answers);
+      if (d.supplement && d.supplement.length) html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
+      html += renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
     }
-    html += renderCoupons(d.coupons);
-    html += renderInsight(d.insight);
-    html += kwSection(d.keywords);
-    html += draftSection(d);
     $('#auto-result').innerHTML = html;
-    bindRefresh(d);
-    bindSup(d, {});
+    bindRefresh(d); bindSup(d, {}); bindLead(d);
+    $('#auto-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+  // ---------- 리포트 모드: /r/<token> ----------
+  async function loadReport(token) {
+    document.querySelectorAll('#tab-auto > .kicker, #tab-auto > h1, #tab-auto > .sub, #tab-auto > .card').forEach((el) => { el.hidden = true; });
+    $('#auto-result').innerHTML = '<p class="muted">리포트를 불러오는 중…</p>';
+    let d; try { const res = await fetch('/api/report/' + encodeURIComponent(token)); d = res.ok ? await res.json() : null; } catch { d = null; }
+    if (!d || !d.place) { $('#auto-result').innerHTML = '<div class="card"><p class="err">리포트를 찾지 못했어요. 링크를 다시 확인해 주세요.</p></div>'; return; }
+    last = d;
+    const made = d.report && d.report.created_at ? kst(d.report.created_at).slice(0, 16) : '';
+    $('#auto-result').innerHTML = `<div class="report-head"><b>${esc(d.place.name)}</b> 플레이스 진단 리포트 · 마케팅 랩 · ${esc(made)} 기준</div>` + renderSummary(d, { report: true }) + `<h2 class="h">자세히 보기</h2>` + renderDetails(d, d.result, d.todos, d.auto, d.answers, { report: true });
+  }
+  if (/^\/r\/[A-Za-z0-9_-]+$/.test(location.pathname)) loadReport(location.pathname.slice(3));
   function bindSup(d, prev) {
     const sg = $('#sup-go'); if (!sg) return;
     const p = d.place;
@@ -507,9 +688,10 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span><span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderAutoScore(d, result, S.pickTodos(result), auto, merged) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
-      const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
-      bindRefresh(d);
+      const dd = { ...d, result, todos: S.pickTodos(result), auto, answers: merged };
+      $('#auto-result').innerHTML = (d.result_v2 ? renderSummary(dd) + `<h2 class="h">자세히 보기</h2>` + renderDetails(dd, result, S.pickTodos(result), auto, merged) : placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span></div>${refreshBtn(d)}</div>`) + renderAutoScore(dd, result, S.pickTodos(result), auto, merged) + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d));
+      const f = $('#sup-form'); if (f) { f.innerHTML = keep; for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; } }
+      bindRefresh(d); bindLead(dd);
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음
     }, { once: true });
   }
