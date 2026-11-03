@@ -284,6 +284,42 @@
   }
   const labelOf = (id) => (S.ITEMS.find((x) => x.id === id) || {}).label || id;
 
+  // 점수 v2: 영역별 품질 단계 + "이걸 하면 +M점" 사다리. 자동 진단에서만 나온다(서버 result_v2).
+  const AXIS_ORDER = ['review', 'keyword', 'desc', 'fresh', 'media', 'convert', 'basic'];
+  const n1 = (x) => (Math.round(x * 10) / 10).toString();
+  function renderScoreV2(r) {
+    const axes = AXIS_ORDER.filter((a) => r.axes[a]);
+    const head = r.score === null
+      ? `<div><div class="num"><b>—</b></div><p class="num-note">읽은 정보가 부족해 점수를 내지 못했어요.</p></div>`
+      : `<div><div class="num"><b>${r.score}</b>${r.grade ? `<span class="g">${r.grade}</span>` : ''}</div><p class="num-note">운영 품질까지 본 점수예요. 등록만 해서는 60점 안팎이고, 리뷰 답글·소식·키워드를 잘 운영해야 75점을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p></div>`;
+    const bars = axes.map((a) => { const x = r.axes[a]; const p = x.known ? (x.earned / x.known).toFixed(2) : 0;
+      return `<div class="grp-row"><span class="gl">${esc(x.label)}</span><div class="bar"><i style="--p:${p}"></i></div><span class="sc">${n1(x.earned)}/${n1(x.known)}</span>${x.known < x.max ? `<span class="cc">확인 안 됨 ${n1(x.max - x.known)}점 제외</span>` : ''}</div>`; }).join('');
+    const top = r.todos.slice(0, 5);
+    const gain = top.reduce((s, t) => s + t.lost, 0);
+    const ladder = top.length
+      ? top.map((t, i) => `<div class="todo"><b>${i + 1}. ${esc(t.label)} <span class="tag good">최대 +${n1(t.lost)}점</span></b><p>${esc(t.next)}</p></div>`).join('')
+        + `<p class="muted" style="margin-top:10px">위 ${top.length}개를 하면 최대 약 +${Math.round(gain)}점(100점 환산 전 기준)이에요.</p>`
+      : '<p class="muted">올릴 점수가 거의 없어요. 지금처럼 운영하세요.</p>';
+    let items = '';
+    for (const a of axes) {
+      items += `<div class="grp">${esc(r.axes[a].label)} <span class="muted">${n1(r.axes[a].earned)}/${n1(r.axes[a].known)}</span></div><div class="card">`;
+      for (const it of r.items.filter((x) => x.axis === a)) {
+        const cls = it.pts === null ? 'mute' : it.pts >= it.max ? 'good' : it.pts > 0 ? 'mid' : 'bad';
+        const tag = it.pts === null ? '확인 안 됨' : `${n1(it.pts)}/${n1(it.max)}`;
+        items += `<div class="item"><h4><span class="badge ${cls}">${tag}</span> ${esc(it.label)}</h4><p class="muted">${esc(it.why)}</p>${it.next && it.pts !== null && it.pts < it.max ? `<p>${esc(it.next)}</p>` : ''}</div>`;
+      }
+      items += '</div>';
+    }
+    return `<section class="res">${secHead('01', '점수 요약', 'Score')}<div class="card"><div class="score-hero">${head}<div>${bars}</div></div></div></section>`
+      + `<section class="res">${secHead('02', '이걸 하면 점수가 올라요', 'Next Steps')}<div class="card">${ladder}</div></section>`
+      + `<section class="res">${secHead('03', '영역별 진단', 'Items')}${items}</section>`;
+  }
+  // 자동 진단: v2가 있으면 v2를 본 점수로, 기존 18항목은 접어서 등록 체크리스트로
+  function renderAutoScore(d, result, todos, auto, answers) {
+    if (!d.result_v2) return renderScore(result, todos, auto, answers);
+    return renderScoreV2(d.result_v2) + `<details class="card" style="margin-top:14px"><summary class="muted">등록 체크리스트(기본 18항목, 채움 여부만 보는 예전 점수 ${result.score ?? '—'}점) 보기</summary>${renderScore(result, todos, auto, answers)}</details>`;
+  }
+
   function renderKeywordsLLM(l) {
     if (!l || !l.keywords || !l.keywords.length) return '';
     const volTag = (k) => (k.volume != null ? `<span class="tag${k.volume >= 100 ? ' good' : ''}">월 ${k.volume.toLocaleString('ko-KR')}회</span>` : '');
@@ -391,7 +427,7 @@
   function renderAuto() {
     const d = last; const p = d.place;
     let html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`);
-    html += renderScore(d.result, d.todos, d.auto, d.answers);
+    html += renderAutoScore(d, d.result, d.todos, d.auto, d.answers);
     if (d.supplement && d.supplement.length) {
       html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span><span class="en">답하면 더 정확해져요</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
     }
@@ -413,7 +449,7 @@
       const result = S.computeScore(merged, { asOf: d.as_of });
       const auto = Object.assign({}, d.auto); for (const k of Object.keys(extra)) auto[k] = { state: result.items.find((i) => i.id === k).state, source: 'manual' };
       const keep = $('#sup-form').innerHTML;
-      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span><span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderScore(result, S.pickTodos(result), auto, merged) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
+      $('#auto-result').innerHTML = placeCard(p, `<span class="k">상태</span><span class="badge accent">보충 답변 반영</span><span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderAutoScore(d, result, S.pickTodos(result), auto, merged) + `<section class="res"><div class="sec-head"><span class="kr">보충 답변</span><span class="en">Supplement</span></div><form id="sup-form">${keep}</form></section>` + renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
       const f = $('#sup-form'); for (const [k, v] of Object.entries(extra)) { const el = f.elements['sup_' + k]; if (!el) continue; if (v === 'none') { const n = f.elements['sup_' + k + '_none']; if (n) n.checked = true; } else if (typeof v === 'object') el.value = v.text; else el.value = v; }
       bindRefresh(d);
       bindSup(d, extra); // 새 버튼에 새 핸들러 1개 — 체인 없음

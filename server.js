@@ -19,6 +19,7 @@ const D = require('./lib/draft');
 const R = require('./lib/review-insight');
 const KL = require('./lib/keyword-llm');
 const DA = require('./lib/draft-analysis');
+const V2 = require('./lib/place-score-v2');
 const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
 const U = require('./lib/usage');
@@ -386,10 +387,6 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
   ]);
   keywords.llm = kwLLM;
   const coupons = CP.couponInsight(facts);
-  if (facts.fresh) {
-    const line = CP.statsLine(facts, { district, score: result.score, now: state.now() });
-    if (line) { try { fs.appendFileSync(STATS_FILE, JSON.stringify(line) + '\n'); } catch { /* 통계 실패 무시 */ } }
-  }
   // 월 검색수(네이버 검색광고 키워드도구) — 라이선스 3종이 .env에 있을 때만. 현재+AI+규칙 상위 후보 한 번에, 매장당 1회 캐시.
   let volumes = facts.keywords_volume !== undefined ? facts.keywords_volume : undefined;
   const wantVol = [...existing, ...((kwLLM && kwLLM.keywords) || []).map((k) => k.keyword), ...keywords.recommendations.map((r) => r.keyword)];
@@ -403,6 +400,12 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
     keywords.diagnosis = keywords.diagnosis.map((d) => ({ ...d, volume: vol(d.keyword) }));
     keywords.recommendations = keywords.recommendations.map((r) => ({ ...r, volume: vol(r.keyword) }));
     if (kwLLM && kwLLM.keywords) { kwLLM.keywords = kwLLM.keywords.map((k) => ({ ...k, volume: vol(k.keyword) })).sort((a, b) => (b.volume ?? -1) - (a.volume ?? -1)); }
+  }
+  // 점수 v2(품질 단계·사다리) — 검색량까지 나온 뒤 계산. v1 result는 보충 질문 재계산용으로 유지
+  const resultV2 = V2.score(facts, { asOf, volumes: volumes || null });
+  if (facts.fresh) {
+    const line = CP.statsLine(facts, { district, score: result.score, scoreV2: resultV2.score, now: state.now() });
+    if (line) { try { fs.appendFileSync(STATS_FILE, JSON.stringify(line) + '\n'); } catch { /* 통계 실패 무시 */ } }
   }
   if (!(cachedKw && cachedDesc && cachedIns && facts.keywords_volume !== undefined)) {
     const pid = v(facts.placeId);
@@ -418,7 +421,7 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
   return {
     mode: 'auto', as_of: asOf, queued_position: queuedPosition, insight,
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
-    answers, auto, result, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
+    answers, auto, result, result_v2: resultV2, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
     description: { text: descText, analysis: descAnalysis, llm: descLLM },
     coupons,
   };
