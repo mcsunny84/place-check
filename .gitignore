@@ -3,3 +3,4 @@ data/
 .codex/*.log
 .codex/*.md
 .env
+.claude/

@@ -58,6 +58,51 @@
   ol.list { margin: 4px 0 0 18px; padding: 0; font-size: 15px; }
   ol.list li { margin: 4px 0; word-break: keep-all; }
   .q { margin: 14px 0 0; }
+  /* 시각 요소(viz.js) */
+  .hero2 { display: grid; grid-template-columns: 150px 1fr; gap: 20px 28px; align-items: center; }
+  .hero2 .bench { font-size: 13px; color: var(--muted); margin-top: 6px; word-break: keep-all; }
+  .hero2 .bench b { color: var(--ink); }
+  .ax { display: grid; grid-template-columns: 92px 1fr 64px 52px; gap: 6px 12px; align-items: center; padding: 9px 0; }
+  .ax + .ax { border-top: 1px solid var(--line); }
+  .ax-l { font-size: 14px; font-weight: 700; }
+  .ax-bar { height: 12px; background: var(--paper-2); border-radius: 0 4px 4px 0; overflow: hidden; }
+  .ax-bar > i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+  .ax-n { font-size: 15px; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; }
+  .ax-max { font-size: 12px; font-weight: 500; color: var(--faint); }
+  .ax-note { grid-column: 1 / -1; font-size: 12px; color: var(--faint); margin-top: -2px; }
+  .lad { padding: 12px 0 10px; border-top: 1px solid var(--line); }
+  .lad-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .lad-h b { font-size: 15px; flex: 1 1 auto; }
+  .lad-gain { font-size: 22px; font-weight: 800; color: var(--ok); font-variant-numeric: tabular-nums; }
+  .lad-gain small { font-size: 12px; font-weight: 700; }
+  .lad-step { font-size: 13px; color: var(--muted); font-weight: 700; }
+  .lad-bar { display: flex; height: 12px; background: var(--paper-2); margin: 8px 0 6px; border-radius: 0 4px 4px 0; overflow: hidden; }
+  .lad-bar i.cur { background: var(--ink); opacity: 0.6; } .lad-bar i.gain { background: var(--ok); }
+  .lad-legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .lad-legend i { display: inline-block; width: 12px; height: 12px; vertical-align: -2px; margin-right: 5px; }
+  .lad-legend i.cur { background: var(--ink); opacity: 0.6; } .lad-legend i.gain { background: var(--ok); }
+  .lad-sum { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 2px solid var(--rule); }
+  .lad-sum b { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .lad-sum b.to { color: var(--ok); }
+  .lad-sum .arrow { color: var(--faint); font-size: 20px; }
+  .mt { margin-top: 12px; } .mt-h { display: flex; align-items: baseline; gap: 10px; font-size: 14px; margin-bottom: 6px; } .mt-h b { font-size: 20px; font-weight: 800; }
+  .hb-row { display: grid; grid-template-columns: minmax(90px, 160px) 1fr 70px auto; gap: 6px 10px; align-items: center; padding: 6px 0; font-size: 14px; }
+  .hb-row + .hb-row { border-top: 1px solid var(--line); }
+  .hb-l { word-break: keep-all; overflow-wrap: anywhere; }
+  .hb-sub { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin-top: -2px; word-break: keep-all; }
+  .hb-v { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .tp { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 6px 0 10px; }
+  .tp-c { font-size: 13px; padding: 3px 9px; border: 1px solid var(--line); color: var(--muted); background: var(--paper-2); }
+  .tp-c.on { color: var(--ok); border-color: var(--ok); background: #fff; font-weight: 700; }
+  .it-bar { height: 6px; background: var(--paper-2); margin-top: 6px; max-width: 320px; } .it-bar > i { display: block; height: 100%; }
+  .kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .kpi > div { border: 1px solid var(--line); padding: 10px 12px; }
+  .kpi .k { font-size: 12px; color: var(--muted); } .kpi .v { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; } .kpi .v small { font-size: 12px; font-weight: 600; color: var(--muted); }
+  @media (max-width: 760px) {
+    .hero2 { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+    .ax { grid-template-columns: 80px 1fr 56px 46px; gap: 6px 8px; } .ax-l { font-size: 13px; }
+    .hb-row { grid-template-columns: 1fr 70px auto; } .hb-row .ax-bar { grid-column: 1 / -1; order: 3; }
+  }
   .q:first-child { margin-top: 0; }
   .spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
   @keyframes s { to { transform: rotate(360deg); } }
@@ -169,6 +214,7 @@
 <script src="/lib/place-scoring.js"></script>
 <script src="/lib/keyword.js"></script>
 <script src="/lib/draft.js"></script>
+<script src="/viz.js?v=3"></script>
 <script src="/lib/copy.js"></script>
 <script>
 (function(){
@@ -287,51 +333,58 @@
   // 점수 v2: 영역별 품질 단계 + "이걸 하면 +M점" 사다리. 자동 진단에서만 나온다(서버 result_v2).
   const AXIS_ORDER = ['review', 'keyword', 'desc', 'fresh', 'media', 'convert', 'basic'];
   const n1 = (x) => (Math.round(x * 10) / 10).toString();
-  function renderScoreV2(r) {
+  function renderScoreV2(r, category) {
+    const V = window.PlaceViz;
     const axes = AXIS_ORDER.filter((a) => r.axes[a]);
-    const head = r.score === null
-      ? `<div><div class="num"><b>—</b></div><p class="num-note">읽은 정보가 부족해 점수를 내지 못했어요.</p></div>`
-      : `<div><div class="num"><b>${r.score}</b>${r.grade ? `<span class="g">${r.grade}</span>` : ''}</div><p class="num-note">운영 품질까지 본 점수예요. 등록만 해서는 60점 안팎이고, 리뷰 답글·소식·키워드를 잘 운영해야 75점을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p></div>`;
-    const bars = axes.map((a) => { const x = r.axes[a]; const p = x.known ? (x.earned / x.known).toFixed(2) : 0;
-      return `<div class="grp-row"><span class="gl">${esc(x.label)}</span><div class="bar"><i style="--p:${p}"></i></div><span class="sc">${n1(x.earned)}/${n1(x.known)}</span>${x.known < x.max ? `<span class="cc">확인 안 됨 ${n1(x.max - x.known)}점 제외</span>` : ''}</div>`; }).join('');
+    const bench = V.benchmark(category);
+    const diff = r.score == null ? null : r.score - bench.median;
+    const head = `<div class="hero2">${V.gauge(r.score, r.grade, bench)}<div>${r.score === null
+      ? '<p class="num-note">읽은 정보가 부족해 점수를 내지 못했어요.</p>'
+      : `<p class="bench">같은 업종(${esc(bench.label)}) 중간값 <b>${bench.median}점</b> · 우리 가게는 <b>${diff > 0 ? '+' : ''}${diff}점</b> ${diff >= 0 ? '위' : '아래'}<br><span class="ax-max">게이지 바깥 눈금 = C 45 · B 60 · A 75, 안쪽 굵은 선 = 업종 중간값</span></p><p class="num-note">등록만 하면 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p>`}</div></div>`;
+    const bars = V.axes(r.axes, axes);
     const top = r.todos.slice(0, 5);
-    const gain = top.reduce((s, t) => s + t.lost, 0);
-    const ladder = top.length
-      ? top.map((t, i) => `<div class="todo"><b>${i + 1}. ${esc(t.label)} <span class="tag good">최대 +${n1(t.lost)}점</span></b><p>${esc(t.next)}</p></div>`).join('')
-        + `<p class="muted" style="margin-top:10px">위 ${top.length}개를 하면 최대 약 +${Math.round(gain)}점(100점 환산 전 기준)이에요.</p>`
-      : '<p class="muted">올릴 점수가 거의 없어요. 지금처럼 운영하세요.</p>';
+    const ladder = top.length ? V.ladder(r, top) : '<p class="muted">올릴 점수가 거의 없어요. 지금처럼 운영하세요.</p>';
     let items = '';
     for (const a of axes) {
       items += `<div class="grp">${esc(r.axes[a].label)} <span class="muted">${n1(r.axes[a].earned)}/${n1(r.axes[a].known)}</span></div><div class="card">`;
       for (const it of r.items.filter((x) => x.axis === a)) {
         const cls = it.pts === null ? 'mute' : it.pts >= it.max ? 'good' : it.pts > 0 ? 'mid' : 'bad';
         const tag = it.pts === null ? '확인 안 됨' : `${n1(it.pts)}/${n1(it.max)}`;
-        items += `<div class="item"><h4><span class="badge ${cls}">${tag}</span> ${esc(it.label)}</h4><p class="muted">${esc(it.why)}</p>${it.next && it.pts !== null && it.pts < it.max ? `<p>${esc(it.next)}</p>` : ''}</div>`;
+        const lv = it.pts === null ? null : V.level(it.max ? it.pts / it.max : 0);
+        items += `<div class="item"><h4><span class="badge ${cls}">${tag}</span> ${esc(it.label)}</h4>${lv ? `<div class="it-bar"><i style="width:${Math.round((it.pts / it.max) * 100)}%;background:${lv.c}"></i></div>` : ''}<p class="muted">${esc(it.why)}</p>${it.next && it.pts !== null && it.pts < it.max ? `<p>${esc(it.next)}</p>` : ''}</div>`;
       }
       items += '</div>';
     }
-    return `<section class="res">${secHead('01', '점수 요약', 'Score')}<div class="card"><div class="score-hero">${head}<div>${bars}</div></div></div></section>`
+    return `<section class="res">${secHead('01', '점수 요약', 'Score')}<div class="card">${head}</div><div class="card">${bars}</div></section>`
       + `<section class="res">${secHead('02', '이걸 하면 점수가 올라요', 'Next Steps')}<div class="card">${ladder}</div></section>`
       + `<section class="res">${secHead('03', '영역별 진단', 'Items')}${items}</section>`;
   }
   // 자동 진단: v2가 있으면 v2를 본 점수로, 기존 18항목은 접어서 등록 체크리스트로
   function renderAutoScore(d, result, todos, auto, answers) {
     if (!d.result_v2) return renderScore(result, todos, auto, answers);
-    return renderScoreV2(d.result_v2) + `<details class="card" style="margin-top:14px"><summary class="muted">등록 체크리스트(기본 18항목, 채움 여부만 보는 예전 점수 ${result.score ?? '—'}점) 보기</summary>${renderScore(result, todos, auto, answers)}</details>`;
+    return renderScoreV2(d.result_v2, d.place && d.place.category) + `<details class="card" style="margin-top:14px"><summary class="muted">등록 체크리스트(기본 18항목, 채움 여부만 보는 예전 점수 ${result.score ?? '—'}점) 보기</summary>${renderScore(result, todos, auto, answers)}</details>`;
   }
 
   function renderKeywordsLLM(l) {
     if (!l || !l.keywords || !l.keywords.length) return '';
     const volTag = (k) => (k.volume != null ? `<span class="tag${k.volume >= 100 ? ' good' : ''}">월 ${k.volume.toLocaleString('ko-KR')}회</span>` : '');
-    const rows = l.keywords.map((k) => `<div class="kw"><span><b>${esc(k.keyword)}</b><br><span class="muted">${esc(k.why)}</span></span>${volTag(k)}</div>`).join('');
+    const rows = l.keywords.some((k) => k.volume != null)
+      ? window.PlaceViz.hbars(l.keywords.map((k) => ({ label: k.keyword, value: k.volume, ok: k.volume == null ? false : k.volume >= 100, tag: k.volume == null ? '검색량 없음' : k.volume >= 100 ? '추천' : '후순위', sub: k.why })), { unit: '' })
+      : l.keywords.map((k) => `<div class="kw"><span><b>${esc(k.keyword)}</b><br><span class="muted">${esc(k.why)}</span></span>${volTag(k)}</div>`).join('');
     const diag = (l.diagnosis || []).map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.verdict === 'keep' ? 'good' : ''}">${d.verdict === 'keep' ? '유지' : '교체 권장'} · ${esc(d.why)}</span></div>`).join('');
     const volNote = l.keywords.some((k) => k.volume != null) ? '<p class="muted" style="margin-top:8px">월 검색수 = PC+모바일, 최근 1개월. 100회 미만은 후순위.</p>' : '';
     return `<div class="card"><h3 class="sub-h" style="margin-top:0">AI 추천 키워드 — 리뷰·블로그·메뉴 근거</h3>${rows}${diag ? `<h3 class="sub-h">현재 키워드 판정</h3>${diag}` : ''}${volNote}</div>`;
   }
   function renderKeywords(kw) {
     const vt = (x) => (x.volume != null ? ` · 월 ${x.volume.toLocaleString('ko-KR')}회` : '');
-    const diag = kw.diagnosis.map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.labels.includes('좋아요') ? 'good' : ''}">${esc(d.labels.join(' · '))}${vt(d)}</span></div>`).join('') || '<p class="muted">등록된 대표키워드가 없어요.</p>';
-    const rec = kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}${vt(r)}</span></div>`).join('') || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
+    const V = window.PlaceViz;
+    const hasVol = kw.diagnosis.some((d) => d.volume != null);
+    const diag = hasVol
+      ? V.hbars(kw.diagnosis.map((d) => ({ label: d.keyword, value: d.volume, ok: d.labels.includes('좋아요'), tag: d.labels.includes('좋아요') ? '좋아요' : d.labels.join('·') })), { unit: '' }) + '<p class="muted" style="margin-top:6px">막대 = 월 검색수(PC+모바일). 회색 = 지역·업종 규칙에 안 맞는 키워드.</p>'
+      : kw.diagnosis.map((d) => `<div class="kw"><span>${esc(d.keyword)}</span><span class="tag ${d.labels.includes('좋아요') ? 'good' : ''}">${esc(d.labels.join(' · '))}${vt(d)}</span></div>`).join('') || '<p class="muted">등록된 대표키워드가 없어요.</p>';
+    const rec = (kw.recommendations.some((r) => r.volume != null)
+      ? V.hbars(kw.recommendations.map((r) => ({ label: r.keyword, value: r.volume, ok: !r.existing && (r.volume || 0) >= 100, tag: r.existing ? '이미 등록' : (r.volume || 0) >= 100 ? '추천' : '후순위' })), { unit: '' })
+      : kw.recommendations.map((r) => `<div class="kw"><span>${esc(r.keyword)}</span><span class="tag">${r.existing ? '이미 등록' : '추천'}${vt(r)}</span></div>`).join('')) || '<p class="muted">추천을 만들 정보가 부족해요(동네·업종·메뉴).</p>';
     const llmHtml = renderKeywordsLLM(kw.llm);
     return `${llmHtml}<div class="grid2" style="margin-top:14px"><div class="card"><h4 class="sub-h" style="margin-top:0">현재 대표키워드</h4>${diag}</div><div class="card" style="margin-top:0"><h4 class="sub-h" style="margin-top:0">규칙 기반 후보 (최대 10)</h4>${rec}</div></div><p class="notice">노출 확인: 네이버 지도 앱에서 위 키워드를 검색해 우리 가게가 몇 페이지에 나오는지 직접 보세요. 1페이지면 지키고, 2~3페이지면 소식·사진·답글로 밀어올릴 여지, 안 보이면 다른 후보로.</p>`;
   }
@@ -345,11 +398,16 @@
     if (!ins) return '';
     const li = (arr, f) => arr.length ? '<ol class="list">' + arr.map((x) => `<li>${f(x)}</li>`).join('') + '</ol>' : '<p class="muted">자료가 부족해요.</p>';
     const st = ins.stats || {};
-    let html = `<section class="res">${secHead('04', '리뷰로 본 우리 가게', 'Reviews')}<div class="card"><p class="muted">방문자 리뷰 전체 ${st.totalCount ?? '?'}건 · 평균 ${st.avgRating ?? '?'}점${st.windowFrom ? ` · <b>${esc(st.windowFrom.slice(5).replace('-', '/'))} 이후 ${st.recent}건</b> 읽음` : ` · 최근 ${st.recent ?? 0}건 읽음`} · 답글률 ${st.recent ? Math.round(100 * (st.recentWithReply || 0) / st.recent) : 0}%${st.recentAvgRating ? ` · 최근 평균 ${st.recentAvgRating}점` : ''}</p>${st.byMonth && st.byMonth.length ? `<p class="muted">월별 리뷰: ${st.byMonth.map((m) => esc(m.month.slice(2).replace('-', '/')) + ' ' + m.count + '건').join(' · ')}</p>` : ''}`;
+    const V = window.PlaceViz;
+    const replyPct = st.recent ? Math.round(100 * (st.recentWithReply || 0) / st.recent) : 0;
+    const kpi = `<div class="kpi"><div><div class="k">전체 리뷰</div><div class="v">${(st.totalCount ?? 0).toLocaleString('ko-KR')}<small>건</small></div></div><div><div class="k">평균 별점</div><div class="v">${st.avgRating ?? '—'}</div></div><div><div class="k">${st.windowFrom ? esc(st.windowFrom.slice(5).replace('-', '/')) + ' 이후' : '최근'} 읽음</div><div class="v">${st.recent ?? 0}<small>건</small></div></div><div><div class="k">최근 평균 별점</div><div class="v">${st.recentAvgRating ?? '—'}</div></div></div>`;
+    const cols = st.byMonth && st.byMonth.length ? `<h4 class="sub-h">월별 방문자 리뷰 수</h4>${V.columns(st.byMonth.map((m) => ({ label: m.month.slice(2).replace('-', '/'), value: m.count })), { unit: '건', title: '월별 리뷰 수', note: st.byMonth[st.byMonth.length - 1].month === new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7) ? '마지막 달은 진행 중(오늘까지)' : null })}` : '';
+    const met = st.recent ? V.meter(replyPct, '사장님 답글률 (읽은 리뷰 기준)', `${st.recentWithReply || 0}건 답글 / ${st.recent}건`) : '';
+    let html = `<section class="res">${secHead('04', '리뷰로 본 우리 가게', 'Reviews')}<div class="card">${kpi}${cols}${met}`;
     if (ins.llm) {
       html += `<h4 class="sub-h">손님이 꼽은 장점</h4>${li(ins.llm.strengths, esc)}<h4 class="sub-h">보완하면 좋을 점</h4>${li(ins.llm.improvements, esc)}<p class="muted" style="margin-top:8px">최근 리뷰 본문을 AI가 읽고 정리한 내용이에요. 아래 숫자는 네이버 리뷰 통계 그대로.</p>`;
     }
-    html += `<h4 class="sub-h">${ins.llm ? '투표 키워드 상위 5' : '손님이 꼽은 장점 (투표 키워드 상위 5)'}</h4>${li(ins.strengths, (s) => `${esc(s.text)} <span class="muted">${s.count}표${s.share != null ? ' · ' + s.share + '%' : ''}</span>`)}`;
+    html += `<h4 class="sub-h">${ins.llm ? '투표 키워드 상위 5' : '손님이 꼽은 장점 (투표 키워드 상위 5)'}</h4>${V.hbars(ins.strengths.map((s) => ({ label: s.text, value: s.count, tag: s.share != null ? s.share + '%' : null, ok: true })), { unit: '표' }) || '<p class="muted">자료가 부족해요.</p>'}`;
     if (!ins.llm) html += `<h4 class="sub-h">보완하면 좋을 점</h4>${li(ins.improvements, (i) => esc(i.text))}`;
     if (st.themes && st.themes.length) html += `<p class="muted" style="margin-top:10px">리뷰에서 많이 언급된 주제: ${st.themes.map((t) => esc(t.name) + ' ' + t.count).join(' · ')}</p>`;
     return html + '</div></section>';
@@ -357,7 +415,7 @@
   function renderDescription(desc, draftText) {
     if (!desc) return renderDraft(draftText);
     const a = desc.analysis || {}; const l = desc.llm;
-    const topics = (a.topics || []).map((t) => `<span class="badge ${t.covered ? 'good' : 'mute'}">${esc(t.label)} ${t.covered ? '있음' : '없음'}</span>`).join(' ');
+    const topics = window.PlaceViz.topics(a.topics || []);
     let html = `<div class="card"><h3 class="sub-h" style="margin-top:0">현재 상세설명 진단</h3><p class="muted">글자 수 ${a.length || 0} · 지역명 ${a.regionHit ? '있음' : '없음'} · 업종·메뉴어 ${a.catHit ? '있음' : '없음'} · 대표키워드 포함 ${(a.keywordsInText || []).length}개${(a.danger || []).length ? ` · <span class="badge bad">주의 표현 ${a.danger.length}</span>` : ''}</p><p style="margin:8px 0">${topics}</p>`;
     if (a.hasText) html += `<details><summary class="muted">현재 원문 보기</summary><pre class="draft">${esc(desc.text)}</pre></details>`;
     html += '</div>';
