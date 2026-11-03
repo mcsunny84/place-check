@@ -340,7 +340,7 @@
     const diff = r.score == null ? null : r.score - bench.median;
     const head = `<div class="hero2">${V.gauge(r.score, r.grade, bench)}<div>${r.score === null
       ? '<p class="num-note">읽은 정보가 부족해 점수를 내지 못했어요.</p>'
-      : `<p class="bench">같은 업종(${esc(bench.label)}) 중간값 <b>${bench.median}점</b> · 우리 가게는 <b>${diff > 0 ? '+' : ''}${diff}점</b> ${diff >= 0 ? '위' : '아래'}<br><span class="ax-max">게이지 바깥 눈금 = C 45 · B 60 · A 75, 안쪽 굵은 선 = 업종 중간값</span></p><p class="num-note">등록만 하면 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p>`}</div></div>`;
+      : `<p class="bench">같은 업종(${esc(bench.label)}) 중간값 <b>${bench.median}점</b> · ${diff === 0 ? '우리 가게는 <b>중간값과 같아요</b>' : `우리 가게는 <b>${Math.abs(diff)}점</b> ${diff > 0 ? '위' : '아래'}`}<br><span class="ax-max">게이지 바깥 눈금 = C 45 · B 60 · A 75, 안쪽 굵은 선 = 업종 중간값</span></p><p class="num-note">등록만 하면 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.${r.coverage < 1 ? ` 읽지 못한 항목(${Math.round((1 - r.coverage) * 100)}%)은 계산에서 뺐어요.` : ''}</p>`}</div></div>`;
     const bars = V.axes(r.axes, axes);
     const top = r.todos.slice(0, 5);
     const ladder = top.length ? V.ladder(r, top) : '<p class="muted">올릴 점수가 거의 없어요. 지금처럼 운영하세요.</p>';
