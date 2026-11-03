@@ -362,7 +362,7 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
     llm: null,
   };
   const hours = v(facts.businessHours);
-  const hoursLine = hours && hours.length ? `${hours[0].day}~${hours[hours.length - 1].day} ${hours[0].start}~${hours[0].end}` : undefined;
+  const hoursLine = hours && hours.length ? DA.hoursLine(hours) || undefined : undefined; // '매일~매일'·요일별 다른 시간 뭉뚱그림 방지
   const booking = auto.C1 && auto.C1.state === 'pass' ? 'naver' : (v(facts.virtualPhone) || v(facts.phone)) ? 'phone' : null;
   const draft = D.buildDraft({
     name: v(facts.name), station, district, categoryNorm: cat.norm,
