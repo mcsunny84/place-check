@@ -20,6 +20,7 @@ const R = require('./lib/review-insight');
 const KL = require('./lib/keyword-llm');
 const DA = require('./lib/draft-analysis');
 const V2 = require('./lib/place-score-v2');
+const RK = require('./lib/rank-check');
 const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
 const U = require('./lib/usage');
@@ -108,7 +109,7 @@ const state = {
 const kstDate = (ms) => new Date(ms + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const cachePath = (id) => path.join(CACHE_DIR, `${id}.json`);
 
-const CACHE_SCHEMA = 3; // facts 구조가 바뀌면 올린다(구 캐시 무시) — 2: coupons 필드 추가, 3: placeMenus 메뉴·jibunAddress
+const CACHE_SCHEMA = 4; // facts 구조가 바뀌면 올린다(구 캐시 무시) — 2: coupons 필드 추가, 3: placeMenus 메뉴·jibunAddress, 4: coordinate·placeType(순위 진단)
 function readCache(placeId, maxAge = CACHE_TTL_MS) {
   try {
     const j = JSON.parse(fs.readFileSync(cachePath(placeId), 'utf8'));
@@ -251,7 +252,7 @@ async function collect(job) {
   budget -= 1;
   let facts = home.status === 200 ? P.parseHome(home.text) : null;
   if (!facts) return { mode: 'fallback', reason: 'unreadable' };
-  facts = { ...facts, fetched_at: new Date(state.now()).toISOString() }; // 서버 시계 기준(테스트 주입 가능)
+  facts = { ...facts, fetched_at: new Date(state.now()).toISOString(), placeType: type }; // 서버 시계 기준(테스트 주입 가능). placeType: 순위 진단 목록 경로
   for (const tab of TABS) {
     if (budget <= 0) break;
     budget -= 1;
@@ -325,6 +326,23 @@ function enqueue(parsed) {
   state.jobs.set(key, job);
   state.queue.push(key);
   return job;
+}
+
+// 키워드 순위: 네이버 지도 목록을 가게 좌표로 검색(fetchText — 간격·차단 감지 공용). 차단되면 서버 공통 쿨다운.
+async function collectRanks(facts, keywords) {
+  const v = (o) => (o && o.status === 'value' ? o.value : null);
+  const pid = v(facts.placeId);
+  const picks = pid ? RK.pickKeywords(keywords, 3) : [];
+  const items = [];
+  for (const k of picks) {
+    if (inCooldown()) break;
+    try {
+      const r = await fetchText(RK.listUrl(facts.placeType, k.keyword, v(facts.coordinate)));
+      const p = r.status === 200 ? RK.parseList(r.text, pid) : null;
+      if (p) items.push({ ...k, ...p });
+    } catch (e) { if (e instanceof Blocked) { startCooldown(); break; } }
+  }
+  return items.length ? { as_of: kstDate(state.now()), items } : null;
 }
 
 // ---------- 결과 조립 ----------
@@ -405,20 +423,23 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
     keywords.recommendations = keywords.recommendations.map((r) => ({ ...r, volume: vol(r.keyword) }));
     if (kwLLM && kwLLM.keywords) { kwLLM.keywords = kwLLM.keywords.map((k) => ({ ...k, volume: vol(k.keyword) })).sort((a, b) => (b.volume ?? -1) - (a.volume ?? -1)); }
   }
+  // 키워드 순위 진단 — 검색량 큰 키워드 최대 3개, 목록 1장씩. 매장당 1회 후 캐시(24h)
+  const cachedRanks = facts.rank_check !== undefined;
+  const ranks = cachedRanks ? facts.rank_check : await collectRanks(facts, keywords);
   // 점수 v2(품질 단계·사다리) — 검색량까지 나온 뒤 계산. v1 result는 보충 질문 재계산용으로 유지
   const resultV2 = V2.score(facts, { asOf, volumes: volumes || null });
   if (facts.fresh) {
     const line = CP.statsLine(facts, { district, score: result.score, scoreV2: resultV2.score, now: state.now() });
     if (line) { try { fs.appendFileSync(STATS_FILE, JSON.stringify(line) + '\n'); } catch { /* 통계 실패 무시 */ } }
   }
-  if (!(cachedKw && cachedDesc && cachedIns && facts.keywords_volume !== undefined)) {
+  if (!(cachedKw && cachedDesc && cachedIns && cachedRanks && facts.keywords_volume !== undefined)) {
     const pid = v(facts.placeId);
     // null(키 없음·실패)은 캐시하지 않는다(undefined → JSON에서 빠짐) — 키를 나중에 넣으면 다음 요청에서 다시 시도
     if (pid) {
       try {
         const ex = readCache(pid) || facts;
         // 같은 수집분에만 붙이고(새로 읽은 facts에 옛 분석 금지), 이번에 실패한 필드는 기존 성공값을 지우지 않는다
-        if (ex.fetched_at === facts.fetched_at) writeCache(pid, { ...ex, keywords_llm: kwLLM || ex.keywords_llm || undefined, keywords_volume: volumes || ex.keywords_volume || undefined, description_llm: descLLM || ex.description_llm || undefined, insight_llm: (insight && insight.llm) || ex.insight_llm || undefined });
+        if (ex.fetched_at === facts.fetched_at) writeCache(pid, { ...ex, keywords_llm: kwLLM || ex.keywords_llm || undefined, keywords_volume: volumes || ex.keywords_volume || undefined, description_llm: descLLM || ex.description_llm || undefined, insight_llm: (insight && insight.llm) || ex.insight_llm || undefined, rank_check: ranks || ex.rank_check || undefined });
       } catch { /* 캐시 실패 무시 */ }
     }
   }
@@ -427,7 +448,7 @@ async function buildResponseUncached(facts, asOf, queuedPosition) {
     place: { id: v(facts.placeId), name: v(facts.name), category: v(facts.category), address: v(facts.roadAddress), district, station, fetched_at: facts.fetched_at },
     answers, auto, result, result_v2: resultV2, todos: S.pickTodos(result), supplement: S.pickSupplement(result), keywords, draft,
     description: { text: descText, analysis: descAnalysis, llm: descLLM },
-    coupons,
+    coupons, ranks: ranks || null,
   };
 }
 

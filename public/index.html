@@ -119,6 +119,23 @@
   h2.h { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 36px 0 4px; }
   p.hsub { font-size: 14px; color: var(--muted); margin-bottom: 14px; word-break: keep-all; }
   .acts { display: grid; gap: 12px; }
+  .rks { display: grid; gap: 12px; }
+  .rk { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; display: grid; grid-template-columns: 1fr 150px; gap: 10px 20px; align-items: center; }
+  .rk .kw1 b { font-size: 17px; font-weight: 700; display: block; word-break: keep-all; }
+  .rk .kw1 .muted { font-size: 13px; }
+  .rk .pos { text-align: right; line-height: 1.1; }
+  .rk .pos b { font-size: 34px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .rk .pos small { font-size: 15px; font-weight: 700; margin-left: 2px; }
+  .rk .pos span { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .rk .pos.good b, .rk .pos.good small { color: var(--ok); } .rk .pos.mid b, .rk .pos.mid small { color: var(--warn); } .rk .pos.bad b, .rk .pos.bad small { color: var(--bad); }
+  .rk .cmp { grid-column: 1 / -1; display: grid; gap: 6px; }
+  .rk .cmp > div { display: grid; grid-template-columns: 76px 1fr 64px; gap: 10px; align-items: center; font-size: 13px; color: var(--muted); }
+  .rk .cmp b { text-align: right; color: var(--ink, #111); font-variant-numeric: tabular-nums; }
+  .rb { display: block; height: 10px; border-radius: 999px; background: var(--paper-2); overflow: hidden; }
+  .rb i { display: block; height: 100%; border-radius: 999px; } .rb i.me { background: var(--accent); } .rb i.them { background: #b8c0cc; }
+  .rk .adl { grid-column: 1 / -1; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; }
+  .rk .adl b.ok { color: var(--ok); } .rk .adl b.no { color: var(--bad); }
+  @media (max-width: 560px) { .rk { grid-template-columns: 1fr 104px; padding: 18px; } .rk .pos b { font-size: 28px; } }
   .act { background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 22px 24px; display: grid; grid-template-columns: 44px 1fr auto; gap: 6px 16px; align-items: start; }
   .act .n { width: 44px; height: 44px; border-radius: 14px; background: var(--accent-bg); color: var(--accent-ink); font-weight: 800; font-size: 18px; display: grid; place-items: center; }
   .act h3 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; word-break: keep-all; }
@@ -483,7 +500,26 @@
     const acts = top.map((t, i) => { const s = sampleFor(t, d); const it = (r.items || []).find((x) => x.id === t.id) || {};
       return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(shortWhy(it))}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div><div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div></div>`; }).join('');
     const actsHtml = top.length ? `<h2 class="h">지금 할 일 ${top.length}가지</h2><p class="hsub">효과 큰 순서예요. 각각 "이렇게 바꾸세요" 샘플을 넣어 뒀어요.</p><div class="acts">${acts}</div>` : '';
-    return head + actsHtml + (opts.report ? renderReportContact(d) : renderLeadForm(d));
+    return head + renderRanks(d) + actsHtml + (opts.report ? renderReportContact(d) : renderLeadForm(d));
+  }
+  // 키워드 순위: 손님이 검색하면 우리가 몇 번째인지 + 상위 5곳과 리뷰 비교 + 광고 자리. 가격은 넣지 않는다.
+  function renderRanks(d) {
+    const rk = d.ranks; if (!rk || !rk.items || !rk.items.length) return '';
+    const fmt = (n) => (n == null ? '?' : Number(n).toLocaleString('ko-KR'));
+    const rows = rk.items.map((x) => {
+      const cls = x.rank == null ? 'bad' : x.rank <= 5 ? 'good' : x.rank <= 15 ? 'mid' : 'bad';
+      const rankTxt = x.rank == null ? `<b>${x.checked}위 밖</b>` : `<b>${x.rank}</b><small>위</small>`;
+      const gap = x.rank == null ? '목록에 안 보여요' : x.rank <= 5 ? '첫 화면 안' : `5위까지 ${x.rank - 5}계단`;
+      const tops = (x.top || []).filter((t) => t.reviews != null);
+      const avg = tops.length ? Math.round(tops.reduce((s, t) => s + t.reviews, 0) / tops.length) : null;
+      const mine = x.me && x.me.reviews != null ? x.me.reviews : null;
+      const max = Math.max(avg || 0, mine || 0, 1);
+      const bar = (v, c) => `<span class="rb"><i class="${c}" style="width:${Math.max(2, Math.round(100 * (v || 0) / max))}%"></i></span>`;
+      const cmp = avg != null ? `<div class="cmp"><div><span>우리 리뷰</span>${bar(mine, 'me')}<b>${fmt(mine)}</b></div><div><span>1~5위 평균</span>${bar(avg, 'them')}<b>${fmt(avg)}</b></div></div>` : '';
+      const ad = x.ads ? `<p class="adl">이 검색어 광고 자리 <b>${x.ads.count}곳</b>이 돌고 있어요 · 우리 가게 ${x.ads.ours ? '<b class="ok">광고 중</b>' : '<b class="no">광고 안 함</b>'}</p>` : '';
+      return `<div class="rk"><div class="kw1"><b>${esc(x.keyword)}</b><span class="muted">월 ${fmt(x.volume)}회 검색${x.registered ? ' · 대표키워드' : ' · 추천 키워드'}</span></div><div class="pos ${cls}">${rankTxt}<span>${gap}</span></div>${cmp}${ad}</div>`;
+    }).join('');
+    return `<h2 class="h">손님이 검색하면 몇 번째에 나올까요</h2><p class="hsub">가게 위치에서 네이버 지도로 검색한 순위예요(${esc(String(rk.as_of || '').slice(5).replace('-', '/'))} 기준, 광고 자리 제외). 리뷰 수는 상위 가게와 비교했어요.</p><div class="rks">${rows}</div>`;
   }
   // 할 일 카드의 근거는 한 줄로 — 키워드처럼 긴 근거는 아래 샘플이 대신한다
   const shortWhy = (it) => { const w = String(it.why || ''); if (it.id === 'K1') { const n = (w.match(/(\d)\/5칸/) || [])[1]; const g = (w.match(/규칙 통과/g) || []).length; if (n) return `등록 ${n}칸 중 ${g}칸만 지역+업종 조합이에요`; }
