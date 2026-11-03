@@ -572,8 +572,8 @@ function createServer() {
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
         if (req.url === '/api/answers') return handleAnswers(req, res, body);
-        if (req.url === '/api/lead') return handleLead(req, res, body).catch((e) => send(res, 500, { ok: false, detail: String(e.message) }));
-        if (req.url === '/api/share') return handleShare(req, res, body).catch((e) => send(res, 500, { ok: false, detail: String(e.message) }));
+        if (req.url === '/api/lead') return handleLead(req, res, body).catch((e) => send(res, 500, { ok: false }));
+        if (req.url === '/api/share') return handleShare(req, res, body).catch((e) => send(res, 500, { ok: false }));
         handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) }));
       });
       return;
