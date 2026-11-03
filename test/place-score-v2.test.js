@@ -27,7 +27,7 @@ test('v2: 대표키워드는 개수가 아니라 칸별 규칙·검색량으로 
   const kws = ['역삼 돈카츠', '창덕궁창경궁외국인식당'];
   const vol = { '역삼 돈카츠': { total: 380 }, '창덕궁창경궁외국인식당': { total: 18 } };
   const k = item(V2.score(base({ keywords: V(kws) }), { asOf: '2026-11-03', volumes: vol }), 'K1');
-  assert.equal(k.pts, 3); // 좋은 칸 1개(규칙 1.5 + 검색량 1.5), 붙여쓰기 칸 0
+  assert.equal(k.pts, 3.6); // 좋은 칸 1개(규칙 1.8 + 검색량 1.8), 붙여쓰기 칸 0
   assert.match(k.next, /빈 칸 3개/);
 });
 

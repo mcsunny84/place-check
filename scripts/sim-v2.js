@@ -22,6 +22,9 @@ for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.json'))) {
   try { facts = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch { continue; }
   if (!facts || !facts.fetched_at) continue;
   const asOf = kst(facts.fetched_at);
+  // 구캐시(_schema < 3)는 새 메뉴 구조(placeMenus)를 못 읽어 메뉴가 비어 보인다 → 0점이 아니라 미확인으로
+  const mv = v(facts.menus);
+  if ((facts._schema || 0) < 3 && (!Array.isArray(mv) || !mv.length)) facts.menus = { status: 'missing' };
   try {
     const { answers } = factsToAnswers(facts, { asOf });
     const r1 = S.computeScore(answers, { asOf });
@@ -45,4 +48,5 @@ const sorted = rows.filter((r) => r.v2 !== null).sort((a, b) => b.v2 - a.v2);
 const line = (r) => `  ${r.v2} (v1 ${r.v1}) ${r.name} [${r.category}]`;
 console.log('상위 5:\n' + sorted.slice(0, 5).map(line).join('\n'));
 console.log('하위 5:\n' + sorted.slice(-5).map(line).join('\n'));
+console.log('v2 등급: ' + ['A', 'B', 'C', 'D'].map((g) => `${g} ${rows.filter((r) => r.grade2 === g).length}`).join(' / '));
 console.log(`확인 비율 0.7 미만(등급 없음): ${rows.filter((r) => r.coverage2 < 0.7).length}곳`);
