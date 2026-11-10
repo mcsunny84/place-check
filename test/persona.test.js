@@ -291,3 +291,11 @@ test('analyzeExtras: 실패는 null', async () => {
   const e = await P.analyzeExtras(facts, cards, { llm: async () => ({ phrases: ['혼밥'], copy: [], missing: [] }), now: NOW });
   assert.deepEqual(e.phrases, ['혼밥']);
 });
+
+test('그림 파일: 모든 키에 SVG가 있고 4KB 이하', () => {
+  for (const k of P.ILLUSTRATION_KEYS) {
+    const f = path.join(__dirname, '..', 'public', 'persona', 'img', k + '.svg');
+    const s = fs.readFileSync(f, 'utf8');
+    assert.ok(s.startsWith('<svg'), k); assert.ok(s.length <= 4096, `${k} ${s.length}`);
+  }
+});
