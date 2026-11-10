@@ -123,7 +123,7 @@ test('verifyCards: 방문 상황 태그도 근거가 된다', () => {
   facts.reviews.value[9].visitCategories = ['아이'];
   const cards = run([persona({ nickname: '아이 동반 가족', group: 'family_kids', signals: [{ words: ['아이'] }], review_ids: [10, 11, 12], menu_no: null })], facts);
   assert.equal(cards.length, 1); assert.equal(cards[0].count, 3);
-  assert.equal(cards[0].group, 'family_kids', '태그 2건 이상이면 일행 유형 유지');
+  assert.equal(cards[0].group, 'family_kids');
   assert.equal(cards[0].picture, 'family-kids');
 });
 
@@ -147,25 +147,23 @@ test('verifyCards: 인용은 소유 리뷰의 원문 부분 문자열만(공백 
 test('verifyCards: 불만은 소유 리뷰의 원문 근거가 있을 때만, 건수는 고유 리뷰 수', () => {
   const dislikes = [
     { text: '점심 줄이 길 때', evidence: [{ review_id: 4, quote: '점심 줄이 길었어요' }, { review_id: 4, quote: '줄이 길었어요' }] },
-    { text: '직원이 불친절할 때', evidence: [{ review_id: 12, quote: '친절하고 깔끔한' }] },      // 다른(미소유) 리뷰
-    { text: '음식이 늦게 나올 때', evidence: [{ review_id: 1, quote: '한 시간 기다렸어요' }] },   // 없는 문장
-    { text: '근거 없음', evidence: [] },
+    { text: '직원이 불친절할 때', evidence: [{ review_id: 12, quote: '친절하고 깔끔한' }] },      // 다른(미소유) 리뷰 → 건수 없이
+    { text: '음식이 늦게 나올 때', evidence: [{ review_id: 1, quote: '한 시간 기다렸어요' }] },   // 없는 문장 → 건수 없이
+    { text: '넷째는 잘림', evidence: [] },
   ];
   const c = run([persona({ dislikes })])[0];
-  assert.deepEqual(c.dislikes, [{ text: '점심 줄이 길 때', count: 1 }]);
+  assert.deepEqual(c.dislikes, [{ text: '점심 줄이 길 때', count: 1 }, { text: '직원이 불친절할 때', count: null }, { text: '음식이 늦게 나올 때', count: null }]);
 });
 
-test('verifyCards: 일행·성별·나이는 근거 2건 이상일 때만 유지', () => {
-  const none = run([persona({ group: 'solo', gender: 'male', age: '30s' })])[0];
-  assert.equal(none.gender, 'unknown'); assert.equal(none.age, 'unknown'); assert.equal(none.picture, 'solo-neutral');
-  const noGroup = run([couple({ group: 'family_kids' })])[0];
-  assert.equal(noGroup.group, 'unknown'); assert.equal(noGroup.picture, 'solo-neutral');
-  const ok = run([couple({ gender: 'mixed', age: '20s',
-    group_evidence: [{ review_id: 5, quote: '여자친구랑 데이트' }, { review_id: 6, quote: '남편이랑 데이트' }],
-    demo_evidence: [{ review_id: 5, quote: '여자친구랑' }, { review_id: 7, quote: '데이트 코스로 추천' }] })])[0];
-  assert.equal(ok.group, 'couple'); assert.equal(ok.age, 'unknown', '데이트라는 말만으로 나이를 정하지 않음'); assert.equal(ok.picture, 'couple-neutral');
-  const one = run([couple({ age: '20s', group_evidence: [{ review_id: 5, quote: '여자친구랑 데이트' }, { review_id: 5, quote: '데이트하다 들렀어요' }] })])[0];
-  assert.equal(one.group, 'unknown', '같은 리뷰 2번은 1건');
+test('verifyCards: 일행·성별·나이는 AI의 짐작을 그대로 쓴다(목록 밖 값만 unknown) — 마케팅용 추정', () => {
+  const c = run([persona({ group: 'solo', gender: 'male', age: '30s' })])[0];
+  assert.equal(c.group, 'solo'); assert.equal(c.gender, 'male'); assert.equal(c.age, '30s'); assert.equal(c.picture, 'solo-m-30s');
+  const k = run([couple({ gender: 'mixed', age: '20s' })])[0];
+  assert.equal(k.picture, 'couple-young');
+  const bad = run([persona({ group: '외계인', gender: 'x', age: 99 })])[0];
+  assert.equal(bad.group, 'unknown'); assert.equal(bad.gender, 'unknown'); assert.equal(bad.age, 'unknown'); assert.equal(bad.picture, 'solo-neutral');
+  const none = run([persona({ group: 'unknown', gender: 'unknown', age: 'unknown' })])[0];
+  assert.equal(none.picture, 'solo-neutral', 'AI가 모르겠다고 하면 중립');
 });
 
 test('verifyCards: 메뉴는 번호로만, 가격이 없으면 금액 숨김, 세트 가격과 섞이지 않음', () => {
@@ -314,19 +312,11 @@ test('R2-04 막대: 이름에 보이는 낱말로만 센다', () => {
   assert.deepEqual(c.signals, [{ label: '점심·저녁', count: 2 }]);
 });
 
-test('R2-05 근거 인용이 그 주장과 이어질 때만: 일행·성별·나이·불만', () => {
+test('R2-05 불만 건수는 아쉬움이 드러난 인용만(문장은 건수 없이 남는다), 별점 낮은 리뷰의 같은 이야기는 인정', () => {
   const f = mkFacts(['점심 음식이 빠르고 친절했습니다 혼밥', '점심 음식이 빠르고 깔끔했습니다 혼밥', '점심에 혼밥하기 좋았습니다 음식이 빨라요', ...BODIES.slice(3)]);
   const ev = [{ review_id: 1, quote: '음식이 빠르고 친절했습니다' }, { review_id: 2, quote: '음식이 빠르고 깔끔했습니다' }];
-  const c = run([persona({ group: 'family_kids', gender: 'female', age: '20s', review_ids: [1, 2, 3], group_evidence: ev, demo_evidence: ev, dislikes: [{ text: '직원이 불친절할 때', evidence: ev }] })], f)[0];
-  assert.equal(c.group, 'unknown'); assert.equal(c.gender, 'unknown'); assert.equal(c.age, 'unknown'); assert.deepEqual(c.dislikes, []);
-  // 단서가 있는 인용은 유지
-  const ok = run([persona({ gender: 'male', age: '30s', group_evidence: [{ review_id: 1, quote: '혼자 가기 좋아요' }, { review_id: 4, quote: '혼자 와서' }],
-    demo_evidence: [{ review_id: 2, quote: '회사 근처라' }, { review_id: 4, quote: '혼자 와서' }] })])[0];
-  assert.equal(ok.group, 'solo'); assert.equal(ok.age, 'unknown', '나이 단서는 1건뿐'); assert.equal(ok.gender, 'unknown');
-  const f2 = mkFacts(['회사 근처라 점심에 혼밥해요 남자 혼자도 편함', '퇴근하고 혼밥 점심 겸 저녁 아저씨 혼자', ...BODIES.slice(2)]);
-  const ok2 = run([persona({ gender: 'male', age: '30s', review_ids: [1, 2, 3, 4], demo_evidence: [{ review_id: 1, quote: '회사 근처라' }, { review_id: 2, quote: '퇴근하고' }, { review_id: 1, quote: '남자 혼자도' }, { review_id: 2, quote: '아저씨 혼자' }] })], f2)[0];
-  assert.equal(ok2.age, '30s'); assert.equal(ok2.gender, 'male');
-  // 별점이 낮은 리뷰의 인용은 불만 근거로 인정
+  const c = run([persona({ review_ids: [1, 2, 3], dislikes: [{ text: '직원이 불친절할 때', evidence: ev }] })], f)[0];
+  assert.deepEqual(c.dislikes, [{ text: '직원이 불친절할 때', count: null }], '칭찬 인용으로는 건수가 붙지 않는다');
   const f3 = mkFacts(); f3.reviews.value[0].rating = 2;
   assert.deepEqual(run([persona({ dislikes: [{ text: '자리가 애매할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f3)[0].dislikes, [{ text: '자리가 애매할 때', count: 1 }]);
 });
@@ -350,13 +340,12 @@ test('R2-08 메뉴 번호는 AI에 보여 준 20번까지만', () => {
   assert.ok(!P.buildCardsPrompt(f, P.selectReviews(f, NOW)).includes('21) '));
 });
 
-test('R3-06 불만: 인용이 그 불만과 같은 이야기일 때만 건수에 넣는다', () => {
-  const d = (text, quote, id = 4) => run([persona({ dislikes: [{ text, evidence: [{ review_id: id, quote }] }] })])[0].dislikes;
-  assert.deepEqual(d('직원이 불친절할 때', '점심 줄이 길었어요'), []);
-  assert.deepEqual(d('점심 줄이 길 때', '점심 줄이 길었어요'), [{ text: '점심 줄이 길 때', count: 1 }]);
-  assert.deepEqual(d('줄이 길 때', '줄이 길었어요'), [{ text: '줄이 길 때', count: 1 }]);
-  assert.deepEqual(d('줄을 서야 할 때', '줄이 길었어요'), [], '낱말이 다르면 버린다(없는 불만을 세는 것보다 빠뜨리는 쪽을 택함)');
-  assert.deepEqual(d('너무 조금 아쉬울 때', '점심 줄이 길었어요'), [], '흔한 꾸밈말만 겹치는 것은 인정하지 않음');
+test('R3-06 불만: 인용이 그 불만과 같은 이야기일 때만 건수를 붙인다', () => {
+  const d = (text, quote, id = 4) => run([persona({ dislikes: [{ text, evidence: [{ review_id: id, quote }] }] })])[0].dislikes[0].count;
+  assert.equal(d('직원이 불친절할 때', '점심 줄이 길었어요'), null);
+  assert.equal(d('점심 줄이 길 때', '점심 줄이 길었어요'), 1);
+  assert.equal(d('줄이 길 때', '줄이 길었어요'), 1);
+  assert.equal(d('너무 조금 아쉬울 때', '점심 줄이 길었어요'), null, '흔한 꾸밈말만 겹치는 것은 인정하지 않음');
   const f = mkFacts(); f.reviews.value[0].rating = 1;
-  assert.deepEqual(run([persona({ dislikes: [{ text: '직원이 불친절할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f)[0].dislikes, [], '별점이 낮아도 다른 이야기면 버림');
+  assert.equal(run([persona({ dislikes: [{ text: '직원이 불친절할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f)[0].dislikes[0].count, null, '별점이 낮아도 다른 이야기면 건수 없음');
 });

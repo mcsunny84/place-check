@@ -86,7 +86,7 @@ function audit(placeId, locked, open) {
     if (!(c.count >= 3 && c.count <= reviews.length)) bad.push(`${tag} 건수 ${c.count}`);
     if (!PS.ILLUSTRATION_KEYS.includes(c.picture)) bad.push(`${tag} 그림 ${c.picture}`);
     for (const s of c.signals || []) if (!(s.count >= 1 && s.count <= c.count)) bad.push(`${tag} 막대 ${s.label} ${s.count}/${c.count}`);
-    for (const d of c.dislikes || []) if (!(d.count >= 1 && d.count <= c.count)) bad.push(`${tag} 불만 ${d.text} ${d.count}`);
+    for (const d of c.dislikes || []) if (d.count !== null && !(d.count >= 1 && d.count <= c.count)) bad.push(`${tag} 불만 ${d.text} ${d.count}`);
     for (const q of c.quotes || []) if (!bodies.some((b) => b.includes(flat(q.text)))) bad.push(`${tag} 인용이 원문에 없음: ${q.text}`);
     if (c.menu && !PS.menuList(facts).some((m) => m.name === c.menu)) bad.push(`${tag} 메뉴판에 없는 메뉴 ${c.menu}`);
   });

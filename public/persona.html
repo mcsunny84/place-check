@@ -176,7 +176,7 @@ ul.l.bad li:before{background:var(--bad)}
 
   <section id="v-result" hidden></section>
 
-  <p class="foot">운영 (주)이스트라이트랩스 · 공개된 리뷰만 읽고 손님 개인정보는 다루지 않아요.<br>나이·성별은 리뷰 내용으로 짐작한 것이라 실제와 다를 수 있어요.</p>
+  <p class="foot">운영 (주)이스트라이트랩스 · 공개된 리뷰만 읽고 손님 개인정보는 다루지 않아요.<br>손님의 나이·성별·일행은 리뷰를 읽고 짐작해 그린 것이라 실제와 다를 수 있어요.</p>
 </main>
 
 <script>
@@ -368,7 +368,7 @@ ul.l.bad li:before{background:var(--bad)}
       h('div', null, h('small', { text: '자주 말하는 메뉴' }), h('strong', { text: c.menu })),
       c.spend ? h('div', null, h('small', { text: '메뉴 가격대' }), h('strong', { text: c.spend })) : null)));
     if (c.likes && c.likes.length) el.appendChild(h('div', { class: 'sec' }, h('h3', { text: '이 손님이 좋아하는 것' }), list(c.likes.map(function (x) { return [x]; }), '')));
-    if (c.dislikes && c.dislikes.length) el.appendChild(h('div', { class: 'sec' }, h('h3', { text: '이 손님이 돌아서는 순간' }), list(c.dislikes.map(function (d) { return [d.text, '리뷰 ' + d.count + '건']; }), 'bad')));
+    if (c.dislikes && c.dislikes.length) el.appendChild(h('div', { class: 'sec' }, h('h3', { text: '이 손님이 돌아서는 순간' }), list(c.dislikes.map(function (d) { return [d.text, d.count ? '리뷰 ' + d.count + '건' : null]; }), 'bad')));
     if (c.quotes && c.quotes.length) {
       var qs = h('div', { class: 'sec' }, h('h3', { text: '손님이 직접 남긴 말' }));
       c.quotes.forEach(function (q) {
