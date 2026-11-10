@@ -704,12 +704,19 @@ async function handlePersonaAnalyze(req, res, body) {
     if (!facts.reviews || facts.reviews.status !== 'value') return send(res, 200, { status: 'unreadable' });
     const n = PS.selectReviews(facts, now).length;
     if (PS.confidence(n) === 'too_few') {
+      // 수집이 끝까지 됐거나 전체 리뷰가 원래 5건 미만일 때만 "부족"으로 보관한다(R2-09: 끊긴 수집을 7일 굳히지 않는다)
+      const win = facts.reviewWindow && facts.reviewWindow.status === 'value' ? facts.reviewWindow.value : null;
+      const stats = facts.reviewStats && facts.reviewStats.status === 'value' ? facts.reviewStats.value : null;
+      const total = stats && Number.isFinite(stats.totalCount) ? stats.totalCount : null;
+      if (!(win && win.complete === true) && !(total !== null && total < 5)) return send(res, 200, { status: 'unreadable' });
       const few = { status: 'too_few', place, confidence: 'too_few', review_count: n, cards: [] };
       try { ST.writeResult(placeId, few, now); } catch { /* 보관 실패는 무시(AI 비용 없음) */ }
       ST.logEvent({ type: 'analyze', placeId, ...place, reviews: n, cards: [], status: 'too_few', ...who }, now);
       return send(res, 200, PS.publicView(few, false));
     }
     if ((state.personaFailUntil.get(placeId) || 0) > now) return send(res, 200, { status: 'failed' });
+    // 자리가 없으면 예산을 쓰기 전에 돌려보낸다(R2-01). 여기부터 runPersona의 자리 잡기까지 await 없음.
+    if (state.personaRunning >= PERSONA_SLOTS && state.personaWaiters.length >= PERSONA_WAIT_MAX) return send(res, 200, { status: 'busy' });
     if (!ipAllowed(clientIp(req), state.personaIpLog, PERSONA_IP_LIMIT)) return send(res, 429, { status: 'slow_down' });
     if (!ST.reserve(now)) return send(res, 200, { status: 'closed' }); // 동기 예약 — 여기까지 await 없음
     job = runPersona(placeId, facts, who).finally(() => state.personaJobs.delete(placeId));
@@ -725,8 +732,10 @@ function handlePersonaUnlock(req, res, body) {
   const placeId = input && /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
   if (!placeId) return send(res, 400, { ok: false, reason: 'bad_request' });
   const ip = clientIp(req); const fails = codeFails(ip); const now = state.now();
-  if (fails.length >= CODE_FAIL_LIMIT) return send(res, 429, { ok: false, reason: 'slow_down' });
-  if (!ST.codeOk(input.code)) { fails.push(now); return send(res, 200, { ok: false, reason: 'bad_code' }); }
+  if (!ST.codeOk(input.code)) { // 한도는 틀린 코드에만(R2-07: 같은 주소의 맞는 코드·폴링은 막지 않는다)
+    if (fails.length >= CODE_FAIL_LIMIT) return send(res, 429, { ok: false, reason: 'slow_down' });
+    fails.push(now); return send(res, 200, { ok: false, reason: 'bad_code' });
+  }
   let stored = ST.readResult(placeId, now);
   if (!stored) return send(res, 200, { ok: false, reason: 'expired' });
   stored = ensureExtras(placeId, stored);

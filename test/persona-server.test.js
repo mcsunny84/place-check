@@ -116,6 +116,7 @@ test('리뷰를 못 읽은 수집은 리뷰 부족이 아니라 unreadable, 보�
 test('리뷰 부족: AI 없이 too_few, 보관됨', async () => {
   reset(); const calls = fakeLlm();
   const f = facts('556'); f.reviews.value = f.reviews.value.slice(0, 3);
+  f.reviewWindow = val({ days: 180, from: '2026-07-19', fetched: 3, complete: true });
   srv.writeCache('556', f);
   const a = await analyze('556');
   assert.equal(a.body.status, 'too_few'); assert.equal(a.body.locked, false); assert.equal(calls.cards, 0);
@@ -153,7 +154,8 @@ test('틀린 코드는 같은 접속 주소에서 분당 10회까지(전달 헤�
   for (let i = 0; i < 10; i++) assert.equal((await unlock('601', String(1000 + i).slice(0, 4).replace('1234', '0001'), '20.0.0.1', `9.9.9.${i}`)).body.reason, 'bad_code');
   const blocked = await unlock('601', '0002', '20.0.0.1', '8.8.8.8');
   assert.equal(blocked.code, 429); assert.equal(blocked.body.reason, 'slow_down');
-  assert.equal((await unlock('601', '1234', '20.0.0.1')).code, 429, '막힌 주소는 맞는 코드도 잠시 거절(무차별 대입 방지)');
+  assert.equal((await unlock('601', '1234', '20.0.0.1')).body.ok, true, 'R2-07: 맞는 코드는 같은 주소에 오답이 쌓였어도 통과(공유 IP)');
+  assert.equal((await unlock('601', '0003', '20.0.0.1')).code, 429, '오답은 계속 거절');
   for (let i = 0; i < 15; i++) assert.equal((await unlock('601', '1234', '30.0.0.1')).body.ok, true);
   srv.state.tick(61_000);
   assert.equal((await unlock('601', '1234', '20.0.0.1')).body.ok, true, '1분 뒤 풀림');
@@ -274,4 +276,31 @@ test('잘못된 요청 본문', async () => {
   assert.equal((await call(srv.handlePersonaUnlock, { placeId: 'abc', code: '1234' })).code, 400);
   const res = await new Promise((resolve) => { const r = { writeHead(c) { this.code = c; }, end(b) { resolve({ code: this.code, body: JSON.parse(b) }); } }; srv.handlePersonaCollect({ headers: {}, socket: {} }, r, '{bad json'); });
   assert.equal(res.code, 400);
+});
+
+// ---------- 코덱스 R2 ----------
+test('R2-01 자리가 꽉 차 거절된 요청은 하루 예산을 쓰지 않는다', async () => {
+  reset(); const calls = fakeLlm();
+  srv.writeCache('650', facts('650'));
+  srv.state.personaRunning = 2; for (let i = 0; i < 20; i++) srv.state.personaWaiters.push(() => {});
+  const a = await analyze('650');
+  assert.equal(a.body.status, 'busy'); assert.equal(calls.cards, 0);
+  assert.equal(ST.dailyCount(srv.state.now()), 0);
+  assert.equal(srv.state.personaJobs.size, 0);
+});
+
+test('R2-09 수집이 중간에 끊겨 5건 미만이면 부족으로 보관하지 않는다', async () => {
+  reset(); const calls = fakeLlm();
+  const f = facts('651'); f.reviews.value = f.reviews.value.slice(0, 4); // 전체 300건인데 4건만 읽힘, 수집 완료 표시 없음
+  srv.writeCache('651', f);
+  assert.equal((await analyze('651')).body.status, 'unreadable');
+  assert.equal(ST.readResult('651', srv.state.now()), null); assert.equal(calls.cards, 0);
+  const g = facts('652'); g.reviews.value = g.reviews.value.slice(0, 4); g.reviewWindow = val({ days: 180, from: '2026-07-19', fetched: 4, complete: false });
+  srv.writeCache('652', g);
+  assert.equal((await analyze('652')).body.status, 'unreadable');
+  // 전체 리뷰 자체가 5건 미만인 가게는 완료 표시가 없어도 부족
+  const h = facts('653'); h.reviews.value = h.reviews.value.slice(0, 3); h.reviewStats = val({ totalCount: 3, avgRating: 5, menus: [{ name: '히레카츠', count: 1 }], votedKeywords: [], votedTotal: 0, themes: [] });
+  srv.writeCache('653', h);
+  assert.equal((await analyze('653')).body.status, 'too_few');
+  assert.equal(ST.readResult('653', srv.state.now()).status, 'too_few');
 });

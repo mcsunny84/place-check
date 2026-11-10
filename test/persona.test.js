@@ -88,7 +88,7 @@ test('verifyCards: 정상 3장, 건수 순, 막대 이름은 실제로 나온 �
   assert.deepEqual(cards.map((c) => c.count), [4, 3, 3]);
   assert.deepEqual(cards.map((c) => c.rank), [1, 2, 3]);
   assert.equal(cards[0].nickname, '점심 혼밥 직장인 민준 씨');
-  assert.deepEqual(cards[0].signals, [{ label: '혼밥', count: 4 }, { label: '점심', count: 4 }]);
+  assert.deepEqual(cards[0].signals, [{ label: '혼밥·혼자', count: 4 }, { label: '점심', count: 4 }]);
   assert.equal(cards[0].menu, '히레카츠'); assert.equal(cards[0].spend, '1.5만 원 안팎');
 });
 
@@ -163,7 +163,7 @@ test('verifyCards: 일행·성별·나이는 근거 2건 이상일 때만 유지
   const ok = run([couple({ gender: 'mixed', age: '20s',
     group_evidence: [{ review_id: 5, quote: '여자친구랑 데이트' }, { review_id: 6, quote: '남편이랑 데이트' }],
     demo_evidence: [{ review_id: 5, quote: '여자친구랑' }, { review_id: 7, quote: '데이트 코스로 추천' }] })])[0];
-  assert.equal(ok.group, 'couple'); assert.equal(ok.age, '20s'); assert.equal(ok.picture, 'couple-young');
+  assert.equal(ok.group, 'couple'); assert.equal(ok.age, 'unknown', '데이트라는 말만으로 나이를 정하지 않음'); assert.equal(ok.picture, 'couple-neutral');
   const one = run([couple({ age: '20s', group_evidence: [{ review_id: 5, quote: '여자친구랑 데이트' }, { review_id: 5, quote: '데이트하다 들렀어요' }] })])[0];
   assert.equal(one.group, 'unknown', '같은 리뷰 2번은 1건');
 });
@@ -298,4 +298,54 @@ test('그림 파일: 모든 키에 SVG가 있고 4KB 이하', () => {
     const s = fs.readFileSync(f, 'utf8');
     assert.ok(s.startsWith('<svg'), k); assert.ok(s.length <= 4096, `${k} ${s.length}`);
   }
+});
+
+// ---------- 코덱스 R2 ----------
+test('R2-03 isFoodService: 업종 토큰으로 판정(스파게티는 외식, 목욕탕은 아님)', () => {
+  const is = (c) => P.isFoodService(mkFacts(BODIES, { category: val(c), reviewStats: val({ menus: [] }) }));
+  for (const c of ['스파게티,파스타전문', '생선회', '칵테일바', '호프,요리주점', '감자탕', '칼국수,만두', '카페,디저트']) assert.equal(is(c), true, c);
+  for (const c of ['목욕탕,사우나', '찜질방', '교회', '회사', '네일바', '스파', '면세점', '협회,단체']) assert.equal(is(c), false, c);
+});
+
+test('R2-04 막대: 이름에 보이는 낱말로만 센다', () => {
+  const f = mkFacts(['점심에 왔어요 든든하게 먹었습니다', '저녁에 왔어요 든든하게 먹었습니다', '회식으로 왔어요 든든하게 먹었습니다', ...BODIES.slice(3)]);
+  const c = run([persona({ signals: [{ words: ['점심', '저녁', '회식'] }], review_ids: [1, 2, 3] })], f)[0];
+  assert.equal(c.count, 3);
+  assert.deepEqual(c.signals, [{ label: '점심·저녁', count: 2 }]);
+});
+
+test('R2-05 근거 인용이 그 주장과 이어질 때만: 일행·성별·나이·불만', () => {
+  const f = mkFacts(['점심 음식이 빠르고 친절했습니다 혼밥', '점심 음식이 빠르고 깔끔했습니다 혼밥', '점심에 혼밥하기 좋았습니다 음식이 빨라요', ...BODIES.slice(3)]);
+  const ev = [{ review_id: 1, quote: '음식이 빠르고 친절했습니다' }, { review_id: 2, quote: '음식이 빠르고 깔끔했습니다' }];
+  const c = run([persona({ group: 'family_kids', gender: 'female', age: '20s', review_ids: [1, 2, 3], group_evidence: ev, demo_evidence: ev, dislikes: [{ text: '직원이 불친절할 때', evidence: ev }] })], f)[0];
+  assert.equal(c.group, 'unknown'); assert.equal(c.gender, 'unknown'); assert.equal(c.age, 'unknown'); assert.deepEqual(c.dislikes, []);
+  // 단서가 있는 인용은 유지
+  const ok = run([persona({ gender: 'male', age: '30s', group_evidence: [{ review_id: 1, quote: '혼자 가기 좋아요' }, { review_id: 4, quote: '혼자 와서' }],
+    demo_evidence: [{ review_id: 2, quote: '회사 근처라' }, { review_id: 4, quote: '혼자 와서' }] })])[0];
+  assert.equal(ok.group, 'solo'); assert.equal(ok.age, 'unknown', '나이 단서는 1건뿐'); assert.equal(ok.gender, 'unknown');
+  const f2 = mkFacts(['회사 근처라 점심에 혼밥해요 남자 혼자도 편함', '퇴근하고 혼밥 점심 겸 저녁 아저씨 혼자', ...BODIES.slice(2)]);
+  const ok2 = run([persona({ gender: 'male', age: '30s', review_ids: [1, 2, 3, 4], demo_evidence: [{ review_id: 1, quote: '회사 근처라' }, { review_id: 2, quote: '퇴근하고' }, { review_id: 1, quote: '남자 혼자도' }, { review_id: 2, quote: '아저씨 혼자' }] })], f2)[0];
+  assert.equal(ok2.age, '30s'); assert.equal(ok2.gender, 'male');
+  // 별점이 낮은 리뷰의 인용은 불만 근거로 인정
+  const f3 = mkFacts(); f3.reviews.value[0].rating = 2;
+  assert.deepEqual(run([persona({ dislikes: [{ text: '자리가 애매할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f3)[0].dislikes, [{ text: '자리가 애매할 때', count: 1 }]);
+});
+
+test('R2-06 개인정보: 계정 문자열은 신호·막대 이름으로도 나가지 않는다', () => {
+  const f = mkFacts(['점심 혼밥 후기는 @alice_test 에 올려요 맛있어요', '혼밥 점심 사진은 @alice_test 계정에 있어요', '점심에 혼밥 @alice_test 팔로우 해주세요', ...BODIES.slice(3)]);
+  assert.equal(run([persona({ signals: [{ words: ['@alice_test'] }], review_ids: [1, 2, 3] })], f).length, 0);
+  assert.equal(run([persona({ signals: [{ words: ['alice_test'] }], review_ids: [1, 2, 3] })], f).length, 0);
+  const cards = run([persona({ signals: [{ words: ['alice_test', '혼밥'] }], review_ids: [1, 2, 3] })], f);
+  assert.equal(cards.length, 1);
+  const walk = (x) => (typeof x === 'string' ? [x] : x && typeof x === 'object' ? Object.values(x).flatMap(walk) : []);
+  for (const s of walk(P.publicView({ status: 'ok', cards }, true))) assert.ok(!P.hasPii(s) && !s.includes('alice'), s);
+});
+
+test('R2-08 메뉴 번호는 AI에 보여 준 20번까지만', () => {
+  const menus = val(Array.from({ length: 30 }, (_, i) => ({ name: `메뉴${i + 1}`, price: val(String(10000 + i)), order: i })));
+  const f = mkFacts(BODIES, { menus });
+  assert.equal(P.menuList(f).length, 20);
+  assert.equal(run([persona({ menu_no: 20 })], f)[0].menu, '메뉴20');
+  assert.equal(run([persona({ menu_no: 21 })], f)[0].menu, null);
+  assert.ok(!P.buildCardsPrompt(f, P.selectReviews(f, NOW)).includes('21) '));
 });

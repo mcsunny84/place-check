@@ -50,3 +50,18 @@ test('기록: 형식이 틀린 방문자 번호·채널은 버리고, 집계는 
   const raw = fs.readFileSync(path.join(process.env.PERSONA_DIR, 'events.jsonl'), 'utf8');
   assert.ok(!raw.includes('<script>')); assert.ok(!raw.includes('kakao'));
 });
+
+test('R2-02 예산 파일이 깨지면 초기화하지 않고 예약을 거절, 저장은 임시 파일→이름 바꾸기', () => {
+  const daily = path.join(process.env.PERSONA_DIR, 'daily.json');
+  const before = fs.readFileSync(daily, 'utf8');
+  fs.writeFileSync(daily, '');
+  assert.equal(ST.reserve(T, 100), false);
+  fs.writeFileSync(daily, '{"2026-11-10": 2');
+  assert.equal(ST.reserve(T, 100), false);
+  assert.equal(fs.readFileSync(daily, 'utf8'), '{"2026-11-10": 2', '깨진 파일을 덮어쓰지 않음');
+  fs.writeFileSync(daily, '[1,2]');
+  assert.equal(ST.reserve(T, 100), false, '객체가 아니면 깨진 것으로 본다');
+  fs.writeFileSync(daily, before);
+  assert.equal(ST.reserve(Date.parse('2026-11-12T03:00:00Z'), 100), true);
+  assert.ok(!fs.existsSync(daily + '.tmp'));
+});
