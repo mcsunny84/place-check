@@ -24,6 +24,8 @@ const RK = require('./lib/rank-check');
 const CP = require('./lib/coupons');
 const AD = require('./lib/naver-searchad');
 const U = require('./lib/usage');
+const PS = require('./lib/persona');
+const ST = require('./lib/persona-store');
 
 const PORT = Number(process.env.PORT) || 8090;
 const PUBLIC = path.join(__dirname, 'public');
@@ -103,6 +105,14 @@ const state = {
   fetchAd: undefined,        // 검색광고 API fetch 주입(테스트)
   adEnv: undefined,          // 검색광고 자격증명 env 주입(테스트)
   now: () => Date.now(),
+  llmPersona: undefined,     // 손님 카드 AI 호출 주입(테스트). undefined = ANTHROPIC_API_KEY 있으면 실제 호출, null = 호출 안 함
+  personaJobs: new Map(),    // placeId -> 카드 분석 Promise(같은 매장 동시 요청 합류)
+  personaExtraJobs: new Map(), // placeId -> 추가 분석 Promise
+  personaFailUntil: new Map(), // placeId -> 이 시각까지 재시도 없이 failed
+  personaRunning: 0, personaWaiters: [], // AI 동시 실행 2건 제한
+  personaIpLog: new Map(),   // 새 분석 요청 IP 한도
+  codeFailLog: new Map(),    // 틀린 코드 시도 IP 한도
+  personaUnlockSeen: new Set(), // `${vid}:${placeId}` — 폴링이 unlock 기록을 부풀리지 않게
   analyses: new Map(),       // `${placeId}:${fetched_at}` -> buildResponse Promise (같은 수집분의 동시 요청은 AI 분석 1회 공유)
 };
 
@@ -466,7 +476,7 @@ function serveStatic(req, res) {
   fs.readFile(file, (err, buf) => {
     if (err) return send(res, 404, 'not found', 'text/plain');
     const ext = path.extname(file);
-    const type = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'text/javascript; charset=utf-8' : ext === '.css' ? 'text/css' : 'application/octet-stream';
+    const type = ext === '.html' ? 'text/html; charset=utf-8' : ext === '.js' ? 'text/javascript; charset=utf-8' : ext === '.css' ? 'text/css' : ext === '.svg' ? 'image/svg+xml' : ext === '.png' ? 'image/png' : 'application/octet-stream';
     res.writeHead(200, { 'content-type': type, 'cache-control': ext === '.html' ? 'no-cache' : 'public, max-age=300' }); // 화면 갱신이 폰에 바로 반영되도록
     res.end(buf);
   });
@@ -587,6 +597,148 @@ async function handleLead(req, res, body) {
   send(res, 200, { ok: true, token: r ? r.token : null });
 }
 
+// ---------- 손님 카드(/persona) ----------
+const PERSONA_SLOTS = 2, PERSONA_WAIT_MAX = 20, PERSONA_FAIL_HOLD_MS = 60 * 1000, PERSONA_IP_LIMIT = 6, CODE_FAIL_LIMIT = 10, EXTRAS_STALE_MS = 120 * 1000, EXTRAS_TRIES_MAX = 2;
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+// 직접 연결은 소켓 주소. 같은 기계의 프록시를 거친 경우에만 전달 헤더를 믿는다(헤더 위조로 한도 우회 방지).
+function clientIp(req) {
+  const ra = (req.socket && req.socket.remoteAddress) || '';
+  if (LOOPBACK.has(ra)) return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || ra;
+  return ra;
+}
+const personaReason = (r) => (r === 'unsupported_url' ? 'unsupported' : r);
+// AI 동시 실행 제한. 자리가 없고 대기 줄도 차면 null.
+async function withPersonaSlot(fn) {
+  if (state.personaRunning >= PERSONA_SLOTS) {
+    if (state.personaWaiters.length >= PERSONA_WAIT_MAX) return null;
+    await new Promise((r) => state.personaWaiters.push(r)); // 자리를 넘겨받음(카운트는 넘겨준 쪽 것을 그대로 씀)
+  } else state.personaRunning += 1;
+  try { return await fn(); }
+  finally { const next = state.personaWaiters.shift(); if (next) next(); else state.personaRunning -= 1; }
+}
+function codeFails(ip) {
+  const t = state.now();
+  const a = (state.codeFailLog.get(ip) || []).filter((x) => t - x < 60_000);
+  state.codeFailLog.set(ip, a);
+  if (state.codeFailLog.size > 1000) for (const [k, x] of state.codeFailLog) if (!x.some((y) => t - y < 60_000)) state.codeFailLog.delete(k);
+  return a;
+}
+
+function startExtras(placeId, facts, result) {
+  if (state.personaExtraJobs.has(placeId)) return;
+  const job = (async () => {
+    let extras = null;
+    try { extras = await withPersonaSlot(() => PS.analyzeExtras(facts, result.cards, { llm: state.llmPersona, now: state.now() })); } catch { extras = null; }
+    const cur = ST.readResult(placeId, state.now()) || result;
+    try { ST.writeResult(placeId, { ...cur, extras: extras || null, extras_status: extras ? 'ready' : 'failed' }, state.now()); } catch { /* 저장 실패: pending으로 남고 ensureExtras가 정리 */ }
+  })().finally(() => state.personaExtraJobs.delete(placeId));
+  state.personaExtraJobs.set(placeId, job);
+}
+// 추가 분석이 오래 pending이면(서버 재시작 등) 한 번 더 돌리거나 failed로 닫는다.
+function ensureExtras(placeId, stored) {
+  if (stored.status !== 'ok' || stored.extras_status !== 'pending' || state.personaExtraJobs.has(placeId)) return stored;
+  if (state.now() - Date.parse(stored.extras_started_at || 0) <= EXTRAS_STALE_MS) return stored;
+  const facts = readCache(placeId);
+  const retry = !!facts && (stored.extras_tries || 1) < EXTRAS_TRIES_MAX;
+  const next = retry ? { ...stored, extras_started_at: new Date(state.now()).toISOString(), extras_tries: (stored.extras_tries || 1) + 1 } : { ...stored, extras_status: 'failed' };
+  let saved;
+  try { saved = ST.writeResult(placeId, next, state.now()); } catch { return { ...stored, extras_status: 'failed' }; }
+  if (retry) startExtras(placeId, facts, saved);
+  return saved;
+}
+
+async function runPersona(placeId, facts, who) {
+  const place = PS.placeMeta(facts);
+  const out = await withPersonaSlot(() => PS.analyzeCards(facts, { llm: state.llmPersona, now: state.now() }));
+  if (!out) return { status: 'busy' };
+  if (out.status !== 'ok') { state.personaFailUntil.set(placeId, state.now() + PERSONA_FAIL_HOLD_MS); return { status: 'failed' }; }
+  let saved;
+  try { saved = ST.writeResult(placeId, { status: 'ok', place, confidence: out.confidence, review_count: out.review_count, cards: out.cards, extras: null, extras_status: 'pending', extras_started_at: new Date(state.now()).toISOString(), extras_tries: 1 }, state.now()); }
+  catch { state.personaFailUntil.set(placeId, state.now() + PERSONA_FAIL_HOLD_MS); return { status: 'failed' }; }
+  ST.logEvent({ type: 'analyze', placeId, ...place, reviews: out.review_count, cards: out.cards.map((c) => c.nickname), status: 'ok', ...who }, state.now());
+  startExtras(placeId, facts, saved);
+  return saved;
+}
+
+// 1단계: 주소 → 매장 확인(수집). 보관된 결과가 있으면 수집 없이 바로.
+async function handlePersonaCollect(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false, reason: 'bad_request' }); }
+  if (!input || typeof input !== 'object') return send(res, 400, { ok: false, reason: 'bad_request' });
+  const parsed = parsePlaceUrl(String(input.url || ''));
+  if (!parsed.ok) return send(res, 200, { ok: false, reason: personaReason(parsed.reason) });
+  const now = state.now();
+  if (!parsed.needsResolve) {
+    const stored = ST.readResult(parsed.placeId, now);
+    if (stored && stored.place) return send(res, 200, { ok: true, cached: true, placeId: parsed.placeId, name: stored.place.name, category: stored.place.category, district: stored.place.district, review_count: stored.review_count || 0, confidence: stored.confidence || null, peeks: [] });
+  }
+  const r = await obtainFacts(parsed, clientIp(req));
+  if (r.fallback) return send(res, r.status, { ok: false, reason: personaReason(r.fallback) });
+  const facts = r.facts; const place = PS.placeMeta(facts); const placeId = place.id || parsed.placeId;
+  if (!placeId || !/^\d{1,20}$/.test(String(placeId))) return send(res, 200, { ok: false, reason: 'unreadable' });
+  if (!PS.isFoodService(facts)) {
+    ST.logEvent({ type: 'reject', placeId, ...place, reason: 'not_food', vid: input.vid, ch: input.ch }, now);
+    return send(res, 200, { ok: false, reason: 'not_food', category: place.category });
+  }
+  if (!facts.reviews || facts.reviews.status !== 'value') return send(res, 200, { ok: false, reason: 'unreadable' });
+  const n = PS.selectReviews(facts, now).length;
+  send(res, 200, { ok: true, cached: !!ST.readResult(placeId, now), placeId: String(placeId), name: place.name, category: place.category, district: place.district, review_count: n, confidence: PS.confidence(n), peeks: PS.peeks(facts, now) });
+}
+
+// 2단계: 카드 분석. 보관 결과 → 합류 → 업종·리뷰 확인 → 예산 예약 → AI.
+async function handlePersonaAnalyze(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { status: 'bad_request' }); }
+  const placeId = input && /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
+  if (!placeId) return send(res, 400, { status: 'bad_request' });
+  const who = { vid: input.vid, ch: input.ch }; const now = state.now();
+  const stored = ST.readResult(placeId, now);
+  if (stored) {
+    ST.logEvent({ type: 'view', placeId, ...(stored.place || {}), reviews: stored.review_count, status: stored.status, ...who }, now);
+    return send(res, 200, PS.publicView(ensureExtras(placeId, stored), false));
+  }
+  let job = state.personaJobs.get(placeId);
+  if (!job) {
+    const facts = readCache(placeId);
+    if (!facts) return send(res, 200, { status: 'expired' });
+    const place = PS.placeMeta(facts);
+    if (!PS.isFoodService(facts)) { ST.logEvent({ type: 'reject', placeId, ...place, reason: 'not_food', ...who }, now); return send(res, 200, { status: 'not_food' }); }
+    if (!facts.reviews || facts.reviews.status !== 'value') return send(res, 200, { status: 'unreadable' });
+    const n = PS.selectReviews(facts, now).length;
+    if (PS.confidence(n) === 'too_few') {
+      const few = { status: 'too_few', place, confidence: 'too_few', review_count: n, cards: [] };
+      try { ST.writeResult(placeId, few, now); } catch { /* 보관 실패는 무시(AI 비용 없음) */ }
+      ST.logEvent({ type: 'analyze', placeId, ...place, reviews: n, cards: [], status: 'too_few', ...who }, now);
+      return send(res, 200, PS.publicView(few, false));
+    }
+    if ((state.personaFailUntil.get(placeId) || 0) > now) return send(res, 200, { status: 'failed' });
+    if (!ipAllowed(clientIp(req), state.personaIpLog, PERSONA_IP_LIMIT)) return send(res, 429, { status: 'slow_down' });
+    if (!ST.reserve(now)) return send(res, 200, { status: 'closed' }); // 동기 예약 — 여기까지 await 없음
+    job = runPersona(placeId, facts, who).finally(() => state.personaJobs.delete(placeId));
+    state.personaJobs.set(placeId, job);
+  }
+  const result = await job;
+  send(res, 200, result.status === 'ok' ? PS.publicView(result, false) : { status: result.status });
+}
+
+// 3단계: 코드로 열기. 틀린 시도만 센다(맞는 코드는 추가 분석을 기다리며 여러 번 불러도 된다).
+function handlePersonaUnlock(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false, reason: 'bad_request' }); }
+  const placeId = input && /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
+  if (!placeId) return send(res, 400, { ok: false, reason: 'bad_request' });
+  const ip = clientIp(req); const fails = codeFails(ip); const now = state.now();
+  if (fails.length >= CODE_FAIL_LIMIT) return send(res, 429, { ok: false, reason: 'slow_down' });
+  if (!ST.codeOk(input.code)) { fails.push(now); return send(res, 200, { ok: false, reason: 'bad_code' }); }
+  let stored = ST.readResult(placeId, now);
+  if (!stored) return send(res, 200, { ok: false, reason: 'expired' });
+  stored = ensureExtras(placeId, stored);
+  const vid = ST.cleanVid(input.vid); const seen = `${vid}:${placeId}`;
+  if (!state.personaUnlockSeen.has(seen)) {
+    if (state.personaUnlockSeen.size > 5000) state.personaUnlockSeen.clear();
+    state.personaUnlockSeen.add(seen);
+    ST.logEvent({ type: 'unlock', placeId, ...(stored.place || {}), reviews: stored.review_count, vid, ch: input.ch }, now);
+  }
+  send(res, 200, { ok: true, ...PS.publicView(stored, true) });
+}
+
 function adminOk(req) {
   const token = new URL(req.url, 'http://x').searchParams.get('token');
   return !!process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
@@ -604,6 +756,23 @@ function createServer() {
         handleCheck(req, res, body).catch((e) => send(res, 500, { mode: 'fallback', reason: 'error', detail: String(e.message) }));
       });
       return;
+    }
+    if (req.method === 'POST' && req.url.startsWith('/api/persona/')) {
+      const route = req.url.split('?')[0];
+      let body = '';
+      req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
+      req.on('end', () => {
+        if (route === '/api/persona/collect') return handlePersonaCollect(req, res, body).catch(() => send(res, 500, { ok: false, reason: 'error' }));
+        if (route === '/api/persona/analyze') return handlePersonaAnalyze(req, res, body).catch(() => send(res, 500, { status: 'failed' }));
+        if (route === '/api/persona/unlock') { try { return handlePersonaUnlock(req, res, body); } catch { return send(res, 500, { ok: false, reason: 'error' }); } }
+        send(res, 404, { ok: false, reason: 'not_found' });
+      });
+      return;
+    }
+    if (req.method === 'GET' && req.url.split('?')[0] === '/persona') { req.url = '/persona.html'; return serveStatic(req, res); }
+    if (req.method === 'GET' && req.url.startsWith('/api/stats/persona')) {
+      if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
+      return send(res, 200, { ...ST.aggregate(), llm: U.aggregate().byKind });
     }
     if (req.method === 'GET' && req.url.startsWith('/api/report/')) {
       const snap = readReport(req.url.slice('/api/report/'.length).split('?')[0]);
@@ -643,4 +812,4 @@ if (require.main === module) {
   createServer().listen(PORT, () => console.log(`place-check http://localhost:${PORT}`));
 }
 
-module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
+module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, handlePersonaCollect, handlePersonaAnalyze, handlePersonaUnlock, clientIp, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
