@@ -349,3 +349,24 @@ test('R3-06 불만: 인용이 그 불만과 같은 이야기일 때만 건수를
   const f = mkFacts(); f.reviews.value[0].rating = 1;
   assert.equal(run([persona({ dislikes: [{ text: '직원이 불친절할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f)[0].dislikes[0].count, null, '별점이 낮아도 다른 이야기면 건수 없음');
 });
+
+// ---------- 실전 시험에서 나온 것 (2026-11-10) ----------
+test('실전: 그림말이 잘린 자리에 반쪽 글자가 남지 않는다(AI 요청이 400으로 거절되던 원인)', () => {
+  const body = '가'.repeat(299) + '😀 맛있어요 또 올게요';      // 300자에서 자르면 그림말이 반으로 갈린다
+  const f = mkFacts([body, '나'.repeat(59) + '😀 좋아요 재방문 의사 있어요', ...BODIES.slice(2)]);
+  const lone = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
+  assert.ok(!lone.test(P.buildCardsPrompt(f, P.selectReviews(f, NOW))));
+  assert.ok(!lone.test(P.buildExtrasPrompt(f, P.selectReviews(f, NOW), [])));
+  assert.ok(!P.peeks(f, NOW).some((p) => lone.test(p)));
+  const c = run([persona({ scene: '가'.repeat(159) + '😀😀', likes: ['나'.repeat(39) + '😀'] })])[0];
+  assert.ok(!lone.test(JSON.stringify(c).replace(/\\u[dD][89a-fA-F][0-9a-fA-F]{2}/g, (m) => String.fromCharCode(parseInt(m.slice(2), 16)))));
+  assert.ok(!lone.test(c.scene) && !lone.test(c.likes[0]));
+});
+
+test('실전: 네이버의 이용 방식 태그(바로 입장·예약 후 이용)는 손님의 흔적이 아니고, 막대 이름의 가운뎃점은 하나로', () => {
+  const f = mkFacts();
+  for (const r of f.reviews.value.slice(0, 4)) r.visitCategories = ['대기 시간 바로 입장', '예약 후 이용', '연인・배우자'];
+  assert.equal(run([persona({ signals: [{ words: ['바로 입장'] }, { words: ['예약 후 이용', '예약 없이 이용'] }] })], f).length, 0);
+  const c = run([persona({ signals: [{ words: ['연인・배우자', '혼밥'] }] })], f)[0];
+  assert.equal(c.signals[0].label, '연인·배우자·혼밥');
+});
