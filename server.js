@@ -481,28 +481,34 @@ async function handleCheck(req, res, body) {
   if (!parsed.ok) { bump('fallback:' + parsed.reason); return send(res, 200, { mode: 'fallback', reason: parsed.reason }); }
   const asOf = kstDate(state.now());
   const refresh = input.refresh === true;
+  const r = await obtainFacts(parsed, ip, { refresh });
+  if (r.fallback) { if (r.counted) bump('fallback:' + r.fallback); return send(res, r.status, { mode: 'fallback', reason: r.fallback }); }
+  if (r.cacheHit) { bump('cache'); const out = await buildResponse(r.facts, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
+  return send(res, 200, await buildResponse(r.facts, asOf, r.position));
+}
+
+// 사실(facts) 확보: 캐시 → 쿨다운·시험 상태 → IP 한도 → 큐 합류·대기. /api/check와 손님 카드가 같이 쓴다.
+// 반환: { facts, position, cacheHit } | { fallback, status, counted } — counted는 기존에 fallback 집계(bump)를 하던 갈래(대기 뒤 실패)만 true.
+async function obtainFacts(parsed, ip, { refresh = false } = {}) {
   // 캐시 hit — 쿨다운·IP 한도 무관. refresh면 10분 이내 수집분만 재사용(그보다 오래됐으면 새로 읽음)
   if (!parsed.needsResolve) {
     const cached = readCache(parsed.placeId, refresh ? REFRESH_MIN_MS : CACHE_TTL_MS);
-    if (cached) { bump('cache'); const out = await buildResponse(cached, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
+    if (cached) return { facts: cached, position: 0, cacheHit: true };
   }
-  if (inCooldown()) {
-    // 만료 여부는 inCooldown이 판단. 여기 왔다면 아직 쿨다운 중
-    return send(res, 200, { mode: 'fallback', reason: 'cooldown' });
-  }
+  if (inCooldown()) return { fallback: 'cooldown', status: 200, counted: false };
   if (state.probing) {
     // 시험 중: 같은 작업 합류만 허용, 다른 miss는 폴백
     const key = parsed.needsResolve ? `s:${parsed.shortUrl}` : parsed.placeId;
-    if (!state.jobs.has(key)) return send(res, 200, { mode: 'fallback', reason: 'cooldown' });
+    if (!state.jobs.has(key)) return { fallback: 'cooldown', status: 200, counted: false };
   }
-  if (!ipAllowed(ip)) return send(res, 429, { mode: 'fallback', reason: 'ip_limit' });
+  if (!ipAllowed(ip)) return { fallback: 'ip_limit', status: 429, counted: false };
   const job = enqueue({ ...parsed, refresh });
-  if (!job) return send(res, 200, { mode: 'fallback', reason: 'busy' });
+  if (!job) return { fallback: 'busy', status: 200, counted: false };
   if (state.cooldownUntil && !state.probing && state.now() >= state.cooldownUntil && !state.running) {
     state.probing = true; state.cooldownUntil = 0; // 만료 후 첫 miss 작업 = 시험
   }
   const position = state.queue.indexOf(job.key);
-  if (position * FETCH_GAP_MS * 4 > REQUEST_DEADLINE_MS) { finishJob(job, null); return send(res, 200, { mode: 'fallback', reason: 'busy' }); }
+  if (position * FETCH_GAP_MS * 4 > REQUEST_DEADLINE_MS) { finishJob(job, null); return { fallback: 'busy', status: 200, counted: false }; }
   const payload = await new Promise((resolve) => {
     let done = false;
     const timer = setTimeout(() => { if (!done) { done = true; job.waiters = job.waiters.filter((w) => w !== cb); if (!job.waiters.length && !job.started) finishJob(job, null); resolve({ mode: 'fallback', reason: 'timeout' }); } }, REQUEST_DEADLINE_MS);
@@ -510,9 +516,9 @@ async function handleCheck(req, res, body) {
     job.waiters.push(cb);
     pump();
   });
-  if (!payload) { bump('fallback:timeout'); return send(res, 200, { mode: 'fallback', reason: 'timeout' }); }
-  if (payload.mode === 'fallback') { bump('fallback:' + payload.reason); return send(res, 200, payload); }
-  return send(res, 200, await buildResponse(payload.facts, asOf, position));
+  if (!payload) return { fallback: 'timeout', status: 200, counted: true };
+  if (payload.mode === 'fallback') return { fallback: payload.reason, status: 200, counted: true };
+  return { facts: payload.facts, position, cacheHit: false };
 }
 
 // 사용자 직접 입력 답변 저장. 매장명·점수는 클라이언트 값을 믿지 않고 서버 캐시·채점으로 채운다.
@@ -637,4 +643,4 @@ if (require.main === module) {
   createServer().listen(PORT, () => console.log(`place-check http://localhost:${PORT}`));
 }
 
-module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
+module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };

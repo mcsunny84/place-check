@@ -281,3 +281,24 @@ test('쿠폰 백데이터: 신규 수집 시 1줄 기록, 캐시 hit는 기록 �
   await new Promise((resolve) => { server.emit('request', { method: 'GET', url: '/api/stats/coupons?token=wrong', headers: {}, socket: {} }, { writeHead(c) { this.c = c; }, end() { assert.equal(this.c, 404); resolve(); } }); });
   delete process.env.ADMIN_TOKEN;
 });
+
+// obtainFacts 추출 뒤에도 fallback 집계 갈래가 그대로인지 고정: 수집 중 차단은 집계, 쿨다운 중 즉시 거절은 미집계
+test('fallback 집계: 수집 중 쿨다운은 +1, 쿨다운 중 즉시 거절은 그대로', async () => {
+  resetState(); fakeFetch(() => ({ status: 429, text: '' }));
+  const hitsFile = path.join(path.dirname(process.env.PLACE_STATS_FILE), 'hits.json');
+  const cool = () => { try { const h = JSON.parse(fs.readFileSync(hitsFile, 'utf8')); return Object.values(h).reduce((s, d) => s + ((d.fallback && d.fallback.cooldown) || 0), 0); } catch { return 0; } };
+  const before = cool();
+  await req(URL1);
+  assert.equal(cool(), before + 1);
+  await req('https://m.place.naver.com/restaurant/1294253380/home', '3.3.3.3');
+  assert.equal(cool(), before + 1);
+});
+
+test('obtainFacts: 직접 캐시 hit만 cacheHit=true', async () => {
+  resetState(); fakeFetch(okPlan);
+  const parsed = { ok: true, placeId: '2086785604', type: 'restaurant', needsResolve: false };
+  const a = await srv.obtainFacts(parsed, '9.9.9.9');
+  assert.equal(a.cacheHit, false); assert.ok(a.facts);
+  const b = await srv.obtainFacts(parsed, '9.9.9.9');
+  assert.equal(b.cacheHit, true); assert.equal(b.position, 0);
+});
