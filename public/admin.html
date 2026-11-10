@@ -8,7 +8,35 @@
 <p class="muted" id="when"></p>
 <div id="out"><p class="muted">불러오는 중…</p></div>
 <div id="answers"></div>
+<div id="persona"></div>
 <script src="/lib/place-scoring.js"></script>
+<script>
+// 손님 카드(/persona) 현황 — 위 표들과 따로 불러 한쪽이 실패해도 다른 쪽은 보인다.
+(async () => {
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const box = document.getElementById('persona');
+  const esc = (x) => String(x == null ? '' : x).replace(/[<>&"]/g, '');
+  try {
+    const r = await fetch('/api/stats/persona?token=' + encodeURIComponent(token));
+    if (!r.ok) return;
+    const d = await r.json();
+    const hhmm = (ts) => { const t = new Date(ts); return `${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`; };
+    const chKo = { ig: '인스타', th: '스레드', chat: '채팅방', etc: '기타' };
+    const days = Object.entries(d.days || {}).sort((a, b) => b[0].localeCompare(a[0]));
+    const sum = (k) => days.reduce((s, [, v]) => s + (v[k] || 0), 0);
+    const llm = d.llm || {}; const cost = ((llm.persona_cards || {}).cost || 0) + ((llm.persona_extras || {}).cost || 0); const paid = (llm.persona_cards || {}).calls || 0;
+    const usd = (x) => '$' + (x || 0).toFixed(2); const krw = (x) => Math.round((x || 0) * 1400).toLocaleString('ko-KR') + '원';
+    const rejects = Object.entries(d.rejects || {}).sort((a, b) => b[1] - a[1]);
+    box.innerHTML = `<h3>손님 카드 (/persona)</h3>`
+      + (d.daily === null ? '<p style="color:#c8432b">하루 분석 장부(data/persona/daily.json)가 깨져 새 분석이 닫혀 있어요. 파일을 확인하세요.</p>' : '')
+      + `<div class="grid"><div class="box"><div class="muted">분석한 매장(누적)</div><div class="big">${sum('analyze')}</div><div class="muted">다시 보기 ${sum('view')}</div></div><div class="box"><div class="muted">코드로 연 횟수</div><div class="big">${sum('unlock')}</div><div class="muted">= 채팅방까지 온 사람</div></div><div class="box"><div class="muted">AI 비용</div><div class="big">${usd(cost)}</div><div class="muted">${paid ? '분석 1건당 ' + krw(cost / paid) : '아직 없음'}</div></div></div>`
+      + `<p class="muted">방문자·연 사람 = 브라우저에 심은 임의 번호 기준(개인정보 아님, 브라우저를 바꾸면 2로 셈). 코드는 채팅방 공지의 4자리.</p>`
+      + `<table><tr><th>날짜</th><th>방문자</th><th>새 분석</th><th>다시 보기</th><th>코드로 연 사람</th><th>업종 거절</th><th>유료 분석(상한 대비)</th></tr>${days.map(([day, v]) => `<tr><td>${day}</td><td>${v.visitors}</td><td>${v.analyze}</td><td>${v.view}</td><td>${v.unlockers}</td><td>${v.reject}</td><td>${(d.daily || {})[day] ?? '-'}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">아직 없음</td></tr>'}</table>`
+      + `<h3>최근 분석한 매장</h3><p class="muted">영업 명단 — 어떤 가게가 손님 카드를 뽑았는지. 최근 200건</p><table><tr><th>시각</th><th>매장</th><th>지역·업종</th><th>리뷰</th><th>손님 카드</th><th>유입</th></tr>${(d.recent || []).map((x) => `<tr><td>${hhmm(x.ts)}</td><td>${x.placeId ? `<a href="https://m.place.naver.com/place/${esc(x.placeId)}/home" target="_blank" rel="noopener">${esc(x.name || x.placeId)}</a>` : esc(x.name)}</td><td class="muted">${esc(x.district)} ${esc(x.category)}</td><td>${x.reviews ?? '-'}</td><td class="muted">${x.status === 'ok' ? (x.cards || []).map(esc).join('<br>') : esc(x.status)}</td><td>${chKo[x.ch] || '-'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">아직 없음</td></tr>'}</table>`
+      + (rejects.length ? `<h3>받지 않은 업종</h3><table>${rejects.map(([k, n]) => `<tr><td>${esc(k)}</td><td>${n}</td></tr>`).join('')}</table>` : '');
+  } catch (e) { box.innerHTML = '<p class="muted">손님 카드 현황을 불러오지 못했어요.</p>'; }
+})();
+</script>
 <script>
 (async () => {
   const token = new URLSearchParams(location.search).get('token') || '';
