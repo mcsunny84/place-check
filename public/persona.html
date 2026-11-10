@@ -37,6 +37,12 @@ h1 em{font-style:normal;color:var(--accent)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .tiny{font-size:12.5px;color:var(--mute);margin-top:10px;line-height:1.55}
 .notice{margin-top:14px;background:#fff;border-radius:14px;padding:14px 16px;font-size:14.5px;line-height:1.6;color:#333;border:1.5px solid var(--line)}
+.cands{margin-top:18px}
+.cands h2{font-size:15px;font-weight:800;margin-bottom:8px}
+.cand{display:block;width:100%;text-align:left;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:13px 16px;margin-top:8px;min-height:54px}
+.cand:active{border-color:var(--ink)}
+.cand b{display:block;font-size:15.5px;font-weight:700;color:var(--ink)}
+.cand span{display:block;font-size:13px;color:var(--sub);margin-top:2px;line-height:1.45}
 .notice b{display:block;font-weight:800;margin-bottom:2px}
 
 .steps{margin-top:26px;background:#fff;border-radius:18px;padding:18px}
@@ -145,13 +151,14 @@ ul.l.bad li:before{background:var(--bad)}
 
   <section id="v-start">
     <h1>우리 가게엔<br><em>어떤 사람</em>이 올까요?</h1>
-    <p class="lead">네이버 플레이스 주소를 넣으면 손님이 남긴 리뷰를 읽고, 자주 오는 손님 세 명을 카드로 그려 드려요. 옆 가게 주소를 넣어도 됩니다.</p>
+    <p class="lead">가게 이름만 넣으면 손님이 남긴 네이버 리뷰를 읽고, 자주 오는 손님 세 명을 카드로 그려 드려요. 옆 가게 이름을 넣어도 됩니다.</p>
     <form id="form" novalidate>
-      <label for="url" class="tiny" style="display:block;margin-top:22px;margin-bottom:-18px">네이버 플레이스 주소</label>
-      <input id="url" class="field" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="naver.me/… 또는 플레이스 주소 붙여넣기">
-      <button id="go" class="btn" type="submit">손님 카드 만들기</button>
+      <label for="url" class="tiny" style="display:block;margin-top:22px;margin-bottom:-18px">가게 이름 (동네를 같이 쓰면 더 잘 찾아요)</label>
+      <input id="url" class="field" type="text" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="300" placeholder="예: 키세카츠 신논현">
+      <button id="go" class="btn" type="submit">가게 찾기</button>
     </form>
-    <p class="tiny">무료 · 가입 없음 · 식당·카페·술집 · 공개된 리뷰만 읽고 손님 개인정보는 다루지 않아요.</p>
+    <div id="cands" class="cands" hidden></div>
+    <p class="tiny">무료 · 가입 없음 · 식당·카페·술집 · 네이버 플레이스 주소를 붙여넣어도 돼요.</p>
     <div id="notice" class="notice" role="alert" hidden></div>
   </section>
 
@@ -177,8 +184,12 @@ ul.l.bad li:before{background:var(--bad)}
   'use strict';
   var CHAT_URL = 'https://open.kakao.com/o/gSiKIHVi';
   var NOTICES = {
-    no_url: '네이버 플레이스 주소를 붙여넣어 주세요. 네이버 지도에서 가게를 열고 공유 → 링크 복사를 누르면 돼요.',
-    unsupported: '네이버 플레이스 주소를 붙여넣어 주세요. 네이버 지도에서 가게를 열고 공유 → 링크 복사를 누르면 돼요.',
+    no_url: '가게 이름을 넣어 주세요. 예: 키세카츠 신논현',
+    too_short: '가게 이름을 두 글자 이상 넣어 주세요. 예: 키세카츠 신논현',
+    too_long: '가게 이름만 짧게 넣어 주세요. 예: 키세카츠 신논현',
+    no_match: '그 이름으로는 가게를 찾지 못했어요. 동네 이름을 같이 넣어 보세요(예: 키세카츠 신논현). 그래도 없으면 네이버 지도에서 가게를 열고 공유 → 링크 복사한 주소를 붙여넣어 주세요.',
+    cooldown: '지금은 네이버에서 읽어오기를 잠시 쉬고 있어요. 30분쯤 뒤에 다시 해주세요.',
+    unsupported: '네이버 플레이스 주소가 아니에요. 가게 이름으로 찾아보거나, 네이버 지도에서 가게를 열고 공유 → 링크 복사한 주소를 붙여넣어 주세요.',
     not_food: '지금은 식당·카페·술집만 돼요. 다른 업종은 준비되면 채팅방에서 알려드릴게요.',
     too_few: '글로 쓴 리뷰가 아직 적어서 손님을 그리기 어려워요. 리뷰가 5건 이상 모이면 다시 해보세요.',
     closed: '오늘 준비한 분량이 끝났어요. 내일 다시 열려요.',
@@ -209,10 +220,15 @@ ul.l.bad li:before{background:var(--bad)}
   if (!/^[a-z0-9]{16}$/.test(VID || '')) { VID = ''; for (var i = 0; i < 16; i++) VID += 'abcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 36)); store('abc_vid', VID); }
   var CH = (function () { try { var c = new URLSearchParams(location.search).get('ch'); return ['ig', 'th', 'chat', 'etc'].indexOf(c) >= 0 ? c : null; } catch (e) { return null; } })();
 
+  // 응답이 끝내 안 오면 화면이 멈추지 않게 기한을 둔다(본문 수신까지 포함). 기한을 넘기면 null.
+  var LIMITS = { search: 20000, collect: 120000, analyze: 180000, unlock: 25000 };
   function api(path, body) {
-    return fetch('/api/persona/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    var ac = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ac) ac.abort(); }, LIMITS[path] || 30000);
+    return fetch('/api/persona/' + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ac ? ac.signal : undefined })
       .then(function (r) { return r.json().catch(function () { return null; }); })
-      .catch(function () { return null; });
+      .catch(function () { return null; })
+      .then(function (j) { clearTimeout(timer); return j; });
   }
   function toast(msg) {
     var t = h('div', { class: 'toast', role: 'status', text: msg });
@@ -228,9 +244,9 @@ ul.l.bad li:before{background:var(--bad)}
     try { document.execCommand('copy'); done(); } catch (e) { toast('복사하지 못했어요. 길게 눌러 복사해 주세요.'); }
     ta.remove();
   }
-  function show(id) { ['v-start', 'v-wait', 'v-result'].forEach(function (v) { $(v).hidden = v !== id; }); window.scrollTo(0, 0); }
+  function show(id) { var was = $(id).hidden; ['v-start', 'v-wait', 'v-result'].forEach(function (v) { $(v).hidden = v !== id; }); if (was) window.scrollTo(0, 0); } // 같은 화면을 다시 그릴 때는 읽던 자리를 지킨다
   function notice(reason) {
-    clearTimers(); show('v-start'); $('go').disabled = false;
+    clearTimers(); show('v-start'); $('go').disabled = false; $('go').textContent = '가게 찾기';
     var n = $('notice'); n.textContent = NOTICES[reason] || RETRY; n.hidden = false;
   }
   function clearTimers() { clearTimeout(S.timer); clearInterval(S.peekTimer); clearTimeout(S.slowTimer); }
@@ -244,14 +260,40 @@ ul.l.bad li:before{background:var(--bad)}
   // ---------- 흐름 ----------
   $('form').addEventListener('submit', function (e) {
     e.preventDefault();
-    var url = $('url').value.trim();
-    $('notice').hidden = true;
-    if (!url) return notice('no_url');
+    var q = $('url').value.trim();
+    $('notice').hidden = true; $('cands').hidden = true;
+    if (!q) return notice('no_url');
+    if (/^https?:\/\//i.test(q)) return start(q);
+    if (/(naver\.me|place\.naver\.com|map\.naver\.com)\//i.test(q)) return start('https://' + q.replace(/^[^a-z]*/i, ''));
+    // 가게 이름 → 후보 보여 주고 고르게
+    $('go').disabled = true; $('go').textContent = '찾는 중…';
+    var seq = S.searchSeq = (S.searchSeq || 0) + 1;
+    api('search', { q: q }).then(function (r) {
+      if (seq !== S.searchSeq) return;
+      $('go').disabled = false; $('go').textContent = '가게 찾기';
+      if (!r || !r.ok) return notice(r && r.reason === 'is_url' ? 'unsupported' : r && r.reason);
+      if (!r.items.length) return notice('no_match');
+      var box = $('cands'); box.textContent = '';
+      box.appendChild(h('h2', { text: r.items.length === 1 ? '이 가게가 맞나요?' : '어느 가게인가요?' }));
+      r.items.forEach(function (it) {
+        var sub = [it.category, it.address].filter(Boolean).join(' · ') + (it.reviews != null ? ' · 리뷰 ' + Number(it.reviews).toLocaleString('ko-KR') : '');
+        box.appendChild(h('button', { type: 'button', class: 'cand', on: { click: function () { if (/^\d{1,20}$/.test(it.id)) start('https://m.place.naver.com/restaurant/' + it.id + '/home'); } } }, h('b', { text: it.name }), sub ? h('span', { text: sub }) : null));
+      });
+      box.appendChild(h('p', { class: 'tiny', text: '찾는 가게가 없으면 동네 이름을 같이 넣어 다시 찾아보세요. 예: 키세카츠 신논현' }));
+      box.hidden = false;
+      try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* 옛 브라우저 */ }
+    });
+  });
+
+  function start(url) {
+    $('notice').hidden = true; $('cands').hidden = true;
     $('go').disabled = true; S.placeId = null; S.view = null; S.polls = 0;
+    var gen = S.gen = (S.gen || 0) + 1; // 이 뒤에 다른 가게를 시작하면 여기서 보낸 요청의 답은 버린다
     $('wait-title').textContent = '가게를 찾고 있어요'; $('peek').hidden = true; $('wait-tip').textContent = '보통 30초 안팎 걸려요. 이 화면을 열어 두세요.';
     show('v-wait'); step(0);
     S.timer = setTimeout(function () { step(1); }, 2500);
     api('collect', { url: url, vid: VID, ch: CH }).then(function (c) {
+      if (gen !== S.gen) return;
       clearTimeout(S.timer);
       if (!c || !c.ok) return notice(c && c.reason);
       S.placeId = c.placeId;
@@ -267,6 +309,7 @@ ul.l.bad li:before{background:var(--bad)}
       S.timer = setTimeout(function () { step(3); }, 14000);
       S.slowTimer = setTimeout(function () { $('wait-tip').textContent = '조금 더 걸리고 있어요. 거의 다 됐어요.'; }, 45000);
       return api('analyze', { placeId: c.placeId, vid: VID, ch: CH }).then(function (a) {
+        if (gen !== S.gen) return;
         clearTimers();
         if (!a || a.status !== 'ok') return notice(a && a.status);
         S.view = a; render();
@@ -274,21 +317,32 @@ ul.l.bad li:before{background:var(--bad)}
         if (a.locked && saved) tryUnlock(saved, true);
       });
     });
-  });
+  }
 
+  var POLL_MAX = 70; // 3초 간격 약 3분 반 — 서버가 멈춘 추가 분석을 다시 돌리는 시간(2분)을 넘겨 기다린다
+  function pollLater(code, gen) { S.polls += 1; S.timer = setTimeout(function () { if (gen === S.gen) tryUnlock(code, true); }, 3000); }
+  function stalled() { if (S.view && !S.view.locked && S.view.extras_status === 'pending') { S.view.extras_status = 'stalled'; render(); } }
   function tryUnlock(code, silent) {
-    return api('unlock', { placeId: S.placeId, code: code, vid: VID, ch: CH }).then(function (u) {
+    var gen = S.gen, placeId = S.placeId;
+    return api('unlock', { placeId: placeId, code: code, vid: VID, ch: CH }).then(function (u) {
+      if (gen !== S.gen || placeId !== S.placeId) return; // 그 사이 다른 가게로 넘어갔다
+      var polling = !!(S.view && !S.view.locked && S.view.extras_status === 'pending');
       if (!u || !u.ok) {
-        if (silent) { if (u && u.reason === 'bad_code') store('abc_persona_code', null); return; }
-        var err = $('code-err'); if (err) err.textContent = (u && NOTICES[u.reason]) || (u && u.reason === 'expired' ? '결과가 오래돼 다시 만들어야 해요. 주소를 다시 넣어 주세요.' : RETRY);
+        if (silent) {
+          if (u && u.reason === 'bad_code') { store('abc_persona_code', null); if (polling) stalled(); return; }
+          if (polling) { if ((!u || u.reason === 'slow_down') && S.polls < POLL_MAX) pollLater(code, gen); else stalled(); } // 한 번 끊겨도 이어서 기다린다
+          return;
+        }
+        var err = $('code-err'); if (err) err.textContent = (u && NOTICES[u.reason]) || (u && u.reason === 'expired' ? '결과가 오래돼 다시 만들어야 해요. 가게를 다시 찾아 주세요.' : RETRY);
         var b = $('code-go'); if (b) b.disabled = false;
         return;
       }
       S.code = code; store('abc_persona_code', code);
       var first = !S.view || S.view.locked;
-      S.view = u; render();
+      var changed = first || u.extras_status !== S.view.extras_status;
+      S.view = u; if (changed) render(); // 기다리는 동안에는 화면을 다시 그리지 않는다(읽던 자리 유지)
       if (first && !silent) { var t = document.querySelector('[data-card="2"]') || $('extras'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-      if (u.extras_status === 'pending' && S.polls < 20) { S.polls += 1; S.timer = setTimeout(function () { tryUnlock(code, true); }, 3000); }
+      if (u.extras_status === 'pending') { if (S.polls < POLL_MAX) pollLater(code, gen); else stalled(); }
     });
   }
 
@@ -347,7 +401,7 @@ ul.l.bad li:before{background:var(--bad)}
         h('span', { class: 'key', text: '잠김' })));
     });
     if (v.locked) root.appendChild(gateEl(total)); else root.appendChild(extrasEl(v, place));
-    root.appendChild(h('button', { class: 'again', type: 'button', text: '다른 가게 해보기', on: { click: function () { clearTimers(); $('url').value = ''; $('go').disabled = false; $('notice').hidden = true; show('v-start'); $('url').focus(); } } }));
+    root.appendChild(h('button', { class: 'again', type: 'button', text: '다른 가게 해보기', on: { click: function () { clearTimers(); S.gen = (S.gen || 0) + 1; $('url').value = ''; $('go').disabled = false; $('go').textContent = '가게 찾기'; $('notice').hidden = true; $('cands').hidden = true; show('v-start'); $('url').focus(); } } }));
     show('v-result');
   }
   function gateEl(total) {
@@ -379,6 +433,11 @@ ul.l.bad li:before{background:var(--bad)}
     var wrap = h('div', { id: 'extras' });
     if (v.cards.length > 1) wrap.appendChild(h('button', { class: 'btn', type: 'button', style: 'margin-top:18px', text: '카드 ' + v.cards.length + '장 한 번에 저장', on: { click: function () { saveCards(v.cards, place); } } }));
     if (v.extras_status === 'pending') { wrap.appendChild(h('div', { class: 'box' }, h('h2', { text: '손님별 분석을 정리하고 있어요' }), h('p', { class: 'hint', text: '잠시만요. 다 되면 이 자리에 나타나요.' }))); return wrap; }
+    if (v.extras_status === 'stalled') {
+      wrap.appendChild(h('div', { class: 'box' }, h('h2', { text: '손님별 분석이 아직 덜 됐어요' }), h('p', { class: 'hint', text: '카드는 그대로 보실 수 있어요. 조금 뒤에 다시 불러와 주세요.' }),
+        h('button', { class: 'mini light', type: 'button', text: '다시 불러오기', on: { click: function () { if (!S.code) return; S.polls = 0; S.view.extras_status = 'pending'; render(); tryUnlock(S.code, true); } } })));
+      return wrap;
+    }
     var e = v.extras;
     if (v.extras_status === 'failed' || !e) { wrap.appendChild(h('div', { class: 'box' }, h('h2', { text: '손님별 분석은 이번엔 만들지 못했어요' }), h('p', { class: 'hint', text: '카드는 그대로 보실 수 있어요.' }))); return wrap; }
     var w = e.when || {}, tot = (w.weekday || 0) + (w.weekend || 0);
@@ -458,9 +517,13 @@ ul.l.bad li:before{background:var(--bad)}
       ctx.fillStyle = '#f7f4ec'; ctx.fillRect(P, y, W - P * 2, sh);
       sl.forEach(function (l, i) { text(l, P + 32, y + 30 + i * 58, '500 36px ' + FONT, '#141414'); });
       y += sh + 38;
-      if (c.signals && c.signals.length) {
+      var lineH = 0;
+      if (c.line) { ctx.font = '700 40px ' + FONT; lineH = wrapText(ctx, '"' + c.line + '"', W - P * 2 - 72).slice(0, 3).length * 58 + 112; }
+      var floor = H - 96 - lineH - 24; // 아래 한 줄 상자 위쪽 한계 — 한 줄 상자 자리를 먼저 잡고 그 위에 들어가는 만큼만 그린다
+      if (c.signals && c.signals.length && y + 54 + 56 <= floor) {
         text('리뷰 ' + reviewCount + '건 중 이 손님의 흔적 ' + c.count + '건', P, y, '700 28px ' + FONT, '#8f8f8f'); y += 54;
         c.signals.forEach(function (s) {
+          if (y + 56 > floor) return;
           text(s.label, P, y, '500 32px ' + FONT, '#141414');
           var bx = P + 210, bw = W - P * 2 - 210 - 120;
           ctx.fillStyle = '#efefec'; rr(ctx, bx, y + 8, bw, 22, 11); ctx.fill();
@@ -470,9 +533,6 @@ ul.l.bad li:before{background:var(--bad)}
         });
         y += 14;
       }
-      var lineH = 0;
-      if (c.line) { ctx.font = '700 40px ' + FONT; lineH = wrapText(ctx, '"' + c.line + '"', W - P * 2 - 72).slice(0, 3).length * 58 + 112; }
-      var floor = H - 96 - lineH - 24; // 아래 한 줄 상자 위쪽 한계
       var q = c.quotes && c.quotes[0];
       if (c.likes && c.likes.length && y + 52 + c.likes.length * 50 + 18 + (q ? 152 : 0) <= floor) {
         text('이 손님이 좋아하는 것', P, y, '700 28px ' + FONT, '#8f8f8f'); y += 52;
@@ -489,7 +549,7 @@ ul.l.bad li:before{background:var(--bad)}
       if (c.line) {
         ctx.font = '700 40px ' + FONT;
         var ll = wrapText(ctx, '"' + c.line + '"', W - P * 2 - 72).slice(0, 3), lh = ll.length * 58 + 112, ly = H - 96 - lh;
-        if (ly >= y) {
+        {
           ctx.fillStyle = '#141414'; rr(ctx, P, ly, W - P * 2, lh, 28); ctx.fill();
           text('이 손님에게 통하는 한 줄', P + 36, ly + 30, '700 26px ' + FONT, '#a9a9a9');
           ll.forEach(function (l, i) { text(l, P + 36, ly + 74 + i * 58, '700 40px ' + FONT, '#fff'); });

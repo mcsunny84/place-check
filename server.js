@@ -110,6 +110,9 @@ const state = {
   personaExtraJobs: new Map(), // placeId -> 추가 분석 Promise
   personaFailUntil: new Map(), // placeId -> 이 시각까지 재시도 없이 failed
   personaRunning: 0, personaWaiters: [], // AI 동시 실행 2건 제한
+  codeVerified: new Set(),     // 'ip|코드' — 이미 그 코드로 연 접속(오답 한도 중에도 폴링 허용)
+  personaSearchLog: new Map(), // 가게 이름 검색 IP 한도
+  personaSearchCache: new Map(), // 검색어 → { at, items } 1시간
   personaIpLog: new Map(),   // 새 분석 요청 IP 한도
   codeFailLog: new Map(),    // 틀린 코드 시도 IP 한도
   personaUnlockSeen: new Set(), // `${vid}:${placeId}` — 폴링이 unlock 기록을 부풀리지 않게
@@ -660,6 +663,29 @@ async function runPersona(placeId, facts, who) {
   return saved;
 }
 
+// 0단계: 가게 이름 → 고를 후보(네이버 지도 목록 1장). 주소를 몰라도 시작할 수 있게.
+const SEARCH_IP_LIMIT = 10, SEARCH_TTL_MS = 60 * 60 * 1000, SEARCH_CACHE_MAX = 500, SEARCH_ITEMS = 8;
+async function handlePersonaSearch(req, res, body) {
+  let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false, reason: 'bad_request' }); }
+  const q = input && typeof input.q === 'string' ? input.q.replace(/\s+/g, ' ').trim() : '';
+  if (/https?:\/\/|naver\.me|place\.naver|map\.naver/i.test(q)) return send(res, 200, { ok: false, reason: 'is_url' });
+  if (q.length < 2) return send(res, 200, { ok: false, reason: 'too_short' });
+  if (q.length > 40) return send(res, 200, { ok: false, reason: 'too_long' });
+  const now = state.now(); const hit = state.personaSearchCache.get(q);
+  if (hit && now - hit.at < SEARCH_TTL_MS) return send(res, 200, { ok: true, items: hit.items });
+  if (inCooldown()) return send(res, 200, { ok: false, reason: 'cooldown' });
+  if (!ipAllowed(clientIp(req), state.personaSearchLog, SEARCH_IP_LIMIT)) return send(res, 429, { ok: false, reason: 'slow_down' });
+  let items = null;
+  try {
+    const r = await fetchText(RK.listUrl('restaurant', q));
+    items = r.status === 200 ? RK.parseSearch(r.text, SEARCH_ITEMS) : null;
+  } catch (e) { if (e instanceof Blocked) { startCooldown(); return send(res, 200, { ok: false, reason: 'cooldown' }); } }
+  if (!items) return send(res, 200, { ok: false, reason: 'unreadable' });
+  if (state.personaSearchCache.size >= SEARCH_CACHE_MAX) state.personaSearchCache.clear();
+  state.personaSearchCache.set(q, { at: now, items });
+  send(res, 200, { ok: true, items });
+}
+
 // 1단계: 주소 → 매장 확인(수집). 보관된 결과가 있으면 수집 없이 바로.
 async function handlePersonaCollect(req, res, body) {
   let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false, reason: 'bad_request' }); }
@@ -732,14 +758,17 @@ function handlePersonaUnlock(req, res, body) {
   const placeId = input && /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
   if (!placeId) return send(res, 400, { ok: false, reason: 'bad_request' });
   const ip = clientIp(req); const fails = codeFails(ip); const now = state.now();
-  if (!ST.codeOk(input.code)) { // 한도는 틀린 코드에만(R2-07: 같은 주소의 맞는 코드·폴링은 막지 않는다)
-    if (fails.length >= CODE_FAIL_LIMIT) return send(res, 429, { ok: false, reason: 'slow_down' });
-    fails.push(now); return send(res, 200, { ok: false, reason: 'bad_code' });
-  }
+  // 오답 한도에 걸린 주소는 처음 넣는 코드를 맞아도 받지 않는다(R3-01: 0000~9999 훑기 방지).
+  // 다만 그 주소에서 이미 그 코드로 연 적이 있으면 통과(R2-07: 열어 둔 사람의 폴링·공유 IP).
+  const ok = ST.codeOk(input.code); const vkey = `${ip}|${String(input.code).trim()}`;
+  if (fails.length >= CODE_FAIL_LIMIT && !(ok && state.codeVerified.has(vkey))) return send(res, 429, { ok: false, reason: 'slow_down' });
+  if (!ok) { fails.push(now); return send(res, 200, { ok: false, reason: 'bad_code' }); }
+  if (state.codeVerified.size > 5000) state.codeVerified.clear();
+  state.codeVerified.add(vkey);
   let stored = ST.readResult(placeId, now);
   if (!stored) return send(res, 200, { ok: false, reason: 'expired' });
   stored = ensureExtras(placeId, stored);
-  const vid = ST.cleanVid(input.vid); const seen = `${vid}:${placeId}`;
+  const vid = ST.cleanVid(input.vid); const seen = `${kstDate(now)}:${vid}:${placeId}`; // 날짜별로 한 번(R3-09)
   if (!state.personaUnlockSeen.has(seen)) {
     if (state.personaUnlockSeen.size > 5000) state.personaUnlockSeen.clear();
     state.personaUnlockSeen.add(seen);
@@ -771,6 +800,7 @@ function createServer() {
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
       req.on('end', () => {
+        if (route === '/api/persona/search') return handlePersonaSearch(req, res, body).catch(() => send(res, 500, { ok: false, reason: 'error' }));
         if (route === '/api/persona/collect') return handlePersonaCollect(req, res, body).catch(() => send(res, 500, { ok: false, reason: 'error' }));
         if (route === '/api/persona/analyze') return handlePersonaAnalyze(req, res, body).catch(() => send(res, 500, { status: 'failed' }));
         if (route === '/api/persona/unlock') { try { return handlePersonaUnlock(req, res, body); } catch { return send(res, 500, { ok: false, reason: 'error' }); } }
@@ -821,4 +851,4 @@ if (require.main === module) {
   createServer().listen(PORT, () => console.log(`place-check http://localhost:${PORT}`));
 }
 
-module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, handlePersonaCollect, handlePersonaAnalyze, handlePersonaUnlock, clientIp, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
+module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, handlePersonaSearch, handlePersonaCollect, handlePersonaAnalyze, handlePersonaUnlock, clientIp, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };

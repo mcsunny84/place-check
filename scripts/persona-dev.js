@@ -1,7 +1,7 @@
 'use strict';
 // 손님 카드 화면 개발용 서버 — 네이버·AI 없이 가짜 매장 1곳으로 흐름을 본다. 운영에서는 쓰지 않는다.
 //   node scripts/persona-dev.js            → http://localhost:8091/persona  (코드 1234)
-//   넣을 주소: https://m.place.naver.com/restaurant/900000001/home (카드 3장) · …/900000002/home (리뷰 부족) · …/900000003/home (미용실)
+//   가게 이름으로 아무 말이나 찾으면 가짜 후보 3곳이 나온다('없는가게'는 0건). 주소로 넣을 때: https://m.place.naver.com/restaurant/900000001/home (카드 3장) · …/900000002/home (리뷰 부족) · …/900000003/home (미용실)
 const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -37,6 +37,19 @@ function facts(id, over = {}) {
 srv.writeCache('900000001', facts('900000001'));
 const few = facts('900000002'); few.reviews.value = few.reviews.value.slice(0, 3); few.reviewWindow = val({ days: 180, from: day(60), fetched: 3, complete: true }); srv.writeCache('900000002', few);
 srv.writeCache('900000003', facts('900000003', { name: val('견본 헤어'), category: val('미용실') }));
+
+// 가게 이름 검색도 가짜 목록으로(네이버를 부르지 않는다). '없는가게'는 결과 0건.
+srv.state.fetchImpl = async (url) => {
+  const q = decodeURIComponent((String(url).match(/query=([^&]*)/) || [])[1] || '').replace(/\+/g, ' ');
+  const items = /없는/.test(q) ? [] : [
+    { id: '900000001', name: '키세카츠 견본점', category: '돈가스', commonAddress: '서울 강남구 역삼동', roadAddress: '강남대로 1', visitorReviewCount: '412' },
+    { id: '900000002', name: '키세카츠 새로 연 점', category: '돈가스', commonAddress: '서울 종로구 운니동', roadAddress: '율곡로 2', visitorReviewCount: '3' },
+    { id: '900000003', name: '견본 헤어', category: '미용실', commonAddress: '서울 강남구 신사동', roadAddress: '논현로 3', visitorReviewCount: '88' },
+  ];
+  const state = { ROOT_QUERY: { 'placeList({})': { businesses: { items: items.map((it) => ({ __ref: 'B:' + it.id })) } } } };
+  for (const it of items) state['B:' + it.id] = it;
+  return { status: 200, url, text: async () => '<script>window.__APOLLO_STATE__ = ' + JSON.stringify(state) + ';</script>' };
+};
 
 const find = (reviews, re) => reviews.filter((r) => re.test(r)).map((r) => Number(r.match(/^(\d+)\./)[1]));
 srv.state.llmPersona = async (kind, prompt) => {

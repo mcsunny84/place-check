@@ -65,3 +65,23 @@ test('R2-02 예산 파일이 깨지면 초기화하지 않고 예약을 거절, 
   assert.equal(ST.reserve(Date.parse('2026-11-12T03:00:00Z'), 100), true);
   assert.ok(!fs.existsSync(daily + '.tmp'));
 });
+
+test('R3-05 상한 0은 0으로, 장부 값이 숫자가 아니면 깨진 것으로 본다', () => {
+  const daily = path.join(process.env.PERSONA_DIR, 'daily.json');
+  const before = fs.readFileSync(daily, 'utf8');
+  const day = Date.parse('2026-11-20T03:00:00Z');
+  assert.equal(ST.reserve(day, 0), false);
+  const keep = process.env.PERSONA_DAILY_MAX;
+  process.env.PERSONA_DAILY_MAX = '0'; assert.equal(ST.reserve(day), false);
+  process.env.PERSONA_DAILY_MAX = '1'; assert.equal(ST.reserve(day), true); assert.equal(ST.reserve(day), false);
+  process.env.PERSONA_DAILY_MAX = '엉뚱'; assert.equal(ST.dailyMax(), 300);
+  process.env.PERSONA_DAILY_MAX = '-5'; assert.equal(ST.dailyMax(), 300);
+  process.env.PERSONA_DAILY_MAX = ''; assert.equal(ST.dailyMax(), 300);
+  if (keep === undefined) delete process.env.PERSONA_DAILY_MAX; else process.env.PERSONA_DAILY_MAX = keep;
+  for (const bad of ['{"2026-11-20":"broken"}', '{"2026-11-20":-1}', '{"2026-11-20":1.5}', '{"2026-11-20":null}']) {
+    fs.writeFileSync(daily, bad);
+    assert.equal(ST.reserve(day, 5), false, bad);
+    assert.equal(fs.readFileSync(daily, 'utf8'), bad);
+  }
+  fs.writeFileSync(daily, before);
+});

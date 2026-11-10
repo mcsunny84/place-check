@@ -349,3 +349,14 @@ test('R2-08 메뉴 번호는 AI에 보여 준 20번까지만', () => {
   assert.equal(run([persona({ menu_no: 21 })], f)[0].menu, null);
   assert.ok(!P.buildCardsPrompt(f, P.selectReviews(f, NOW)).includes('21) '));
 });
+
+test('R3-06 불만: 인용이 그 불만과 같은 이야기일 때만 건수에 넣는다', () => {
+  const d = (text, quote, id = 4) => run([persona({ dislikes: [{ text, evidence: [{ review_id: id, quote }] }] })])[0].dislikes;
+  assert.deepEqual(d('직원이 불친절할 때', '점심 줄이 길었어요'), []);
+  assert.deepEqual(d('점심 줄이 길 때', '점심 줄이 길었어요'), [{ text: '점심 줄이 길 때', count: 1 }]);
+  assert.deepEqual(d('줄이 길 때', '줄이 길었어요'), [{ text: '줄이 길 때', count: 1 }]);
+  assert.deepEqual(d('줄을 서야 할 때', '줄이 길었어요'), [], '낱말이 다르면 버린다(없는 불만을 세는 것보다 빠뜨리는 쪽을 택함)');
+  assert.deepEqual(d('너무 조금 아쉬울 때', '점심 줄이 길었어요'), [], '흔한 꾸밈말만 겹치는 것은 인정하지 않음');
+  const f = mkFacts(); f.reviews.value[0].rating = 1;
+  assert.deepEqual(run([persona({ dislikes: [{ text: '직원이 불친절할 때', evidence: [{ review_id: 1, quote: '자리가 넓어요' }] }] })], f)[0].dislikes, [], '별점이 낮아도 다른 이야기면 버림');
+});

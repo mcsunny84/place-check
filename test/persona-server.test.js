@@ -50,7 +50,7 @@ function fakeLlm({ cards = { personas: [P1, P2] }, extras = { phrases: ['혼밥'
 function reset() {
   const s = srv.state;
   s.cooldownUntil = 0; s.probing = false; s.jobs.clear(); s.queue.length = 0; s.running = false; s.lastFetchStart = 0; s.ipLog.clear();
-  s.personaJobs.clear(); s.personaExtraJobs.clear(); s.personaFailUntil.clear(); s.personaRunning = 0; s.personaWaiters.length = 0; s.personaIpLog.clear(); s.codeFailLog.clear(); s.personaUnlockSeen.clear();
+  s.personaJobs.clear(); s.personaSearchLog.clear(); s.personaSearchCache.clear(); s.personaExtraJobs.clear(); s.personaFailUntil.clear(); s.personaRunning = 0; s.personaWaiters.length = 0; s.personaIpLog.clear(); s.codeFailLog.clear(); s.codeVerified.clear(); s.personaUnlockSeen.clear();
   let t = NOW; s.now = () => t; s.tick = (ms) => { t += ms; };
   for (const f of fs.readdirSync(srv.CACHE_DIR)) fs.rmSync(path.join(srv.CACHE_DIR, f), { recursive: true, force: true });
   fs.rmSync(process.env.PERSONA_DIR, { recursive: true, force: true });
@@ -151,10 +151,12 @@ test('analyze → 잠긴 응답에는 2번 카드 본문·추가 분석이 없�
 test('틀린 코드는 같은 접속 주소에서 분당 10회까지(전달 헤더를 바꿔도), 맞는 코드는 여러 번 가능', async () => {
   reset(); fakeLlm();
   srv.writeCache('601', facts('601')); await analyze('601'); await extrasDone();
+  assert.equal((await unlock('601', '1234', '20.0.0.1')).body.ok, true, '오답이 쌓이기 전에 이미 연 사람');
   for (let i = 0; i < 10; i++) assert.equal((await unlock('601', String(1000 + i).slice(0, 4).replace('1234', '0001'), '20.0.0.1', `9.9.9.${i}`)).body.reason, 'bad_code');
   const blocked = await unlock('601', '0002', '20.0.0.1', '8.8.8.8');
   assert.equal(blocked.code, 429); assert.equal(blocked.body.reason, 'slow_down');
-  assert.equal((await unlock('601', '1234', '20.0.0.1')).body.ok, true, 'R2-07: 맞는 코드는 같은 주소에 오답이 쌓였어도 통과(공유 IP)');
+  assert.equal((await unlock('601', '1234', '20.0.0.1')).body.ok, true, 'R2-07: 이미 그 코드로 연 사람의 폴링은 오답이 쌓여도 통과');
+  assert.equal((await unlock('601', '5678', '20.0.0.1')).code, 429, 'R3-01: 한도 뒤에는 처음 넣는 코드는 맞아도 거절(0000~9999 훑기 방지)');
   assert.equal((await unlock('601', '0003', '20.0.0.1')).code, 429, '오답은 계속 거절');
   for (let i = 0; i < 15; i++) assert.equal((await unlock('601', '1234', '30.0.0.1')).body.ok, true);
   srv.state.tick(61_000);
@@ -303,4 +305,94 @@ test('R2-09 수집이 중간에 끊겨 5건 미만이면 부족으로 보관하�
   srv.writeCache('653', h);
   assert.equal((await analyze('653')).body.status, 'too_few');
   assert.equal(ST.readResult('653', srv.state.now()).status, 'too_few');
+});
+
+// ---------- 매장 이름 검색 ----------
+const RK = require('../lib/rank-check');
+const listHtml = (items) => '<script>window.__APOLLO_STATE__ = ' + JSON.stringify({
+  ROOT_QUERY: { 'placeList({"input":{"query":"x"}})': { businesses: { items: items.map((it) => ({ __ref: 'B:' + it.id })) } }, 'placeList({"display":9})': { businesses: { items: [] } } },
+  ...Object.fromEntries(items.map((it) => ['B:' + it.id, it])),
+}) + ';</script>';
+const ITEMS = [
+  { id: '2086785604', name: '키세카츠 안국역점', category: '돈가스', commonAddress: '서울 종로구 운니동', roadAddress: '율곡로 88 2층', visitorReviewCount: '1,696' },
+  { id: '1186508365', name: '키세카츠 <b>신사역점</b>', category: '돈가스', commonAddress: '서울 강남구 신사동', roadAddress: '논현로149길 52', visitorReviewCount: null },
+  { id: 'abc', name: '번호가 이상한 곳', category: '카페' },
+  { id: '2099352367', name: '', category: '돈가스' },
+];
+const search = (q, ip) => call(srv.handlePersonaSearch, { q }, ip);
+
+test('parseSearch: 번호·이름이 있는 가게만, 최대 개수, 못 읽으면 null', () => {
+  const out = RK.parseSearch(listHtml(ITEMS), 8);
+  assert.deepEqual(out, [
+    { id: '2086785604', name: '키세카츠 안국역점', category: '돈가스', address: '서울 종로구 운니동 · 율곡로 88 2층', reviews: 1696 },
+    { id: '1186508365', name: '키세카츠 <b>신사역점</b>', category: '돈가스', address: '서울 강남구 신사동 · 논현로149길 52', reviews: null },
+  ]);
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: String(1000 + i), name: '가게' + i, category: '카페' }));
+  assert.equal(RK.parseSearch(listHtml(many), 8).length, 8);
+  assert.deepEqual(RK.parseSearch(listHtml([]), 8), []);
+  assert.equal(RK.parseSearch('<html>보안 확인</html>', 8), null);
+  assert.equal(RK.parseSearch(null, 8), null);
+});
+
+test('search: 이름으로 후보를 돌려주고, 같은 검색어는 네이버를 다시 부르지 않는다', async () => {
+  reset(); const fetched = fakeFetch((url) => ({ status: 200, text: listHtml(ITEMS) }));
+  const r = await search('  키세카츠  ');
+  assert.equal(r.body.ok, true); assert.equal(r.body.items.length, 2); assert.equal(r.body.items[0].id, '2086785604');
+  assert.ok(/restaurant\/list\?/.test(fetched[0]) && decodeURIComponent(fetched[0]).includes('query=키세카츠'));
+  await search('키세카츠'); await search('키세카츠', '10.0.0.9');
+  assert.equal(fetched.length, 1);
+  srv.state.tick(61 * 60 * 1000);
+  await search('키세카츠');
+  assert.equal(fetched.length, 2, '1시간 뒤에는 다시 읽음');
+});
+
+test('search: 너무 짧거나 긴 말·주소·깨진 본문은 네이버를 부르지 않는다', async () => {
+  reset(); const fetched = fakeFetch(() => ({ status: 200, text: listHtml(ITEMS) }));
+  assert.equal((await search('가')).body.reason, 'too_short');
+  assert.equal((await search('')).body.reason, 'too_short');
+  assert.equal((await search('가'.repeat(41))).body.reason, 'too_long');
+  assert.equal((await search('https://naver.me/abcd')).body.reason, 'is_url');
+  assert.equal((await call(srv.handlePersonaSearch, { q: 123 })).body.reason, 'too_short');
+  const bad = await new Promise((resolve) => { const r = { writeHead(c) { this.code = c; }, end(b) { resolve({ code: this.code }); } }; srv.handlePersonaSearch({ headers: {}, socket: {} }, r, '{bad'); });
+  assert.equal(bad.code, 400); assert.equal(fetched.length, 0);
+});
+
+test('search: 접속 주소당 분당 10회(보관된 검색어는 세지 않음), 결과 없음·읽기 실패·차단 구분', async () => {
+  reset(); let mode = 'ok';
+  const fetched = fakeFetch(() => (mode === 'empty' ? { status: 200, text: listHtml([]) } : mode === 'broken' ? { status: 200, text: '<html></html>' } : mode === '429' ? { status: 429, text: '' } : mode === 'throw' ? new Error('timeout') : { status: 200, text: listHtml(ITEMS) }));
+  for (let i = 0; i < 10; i++) assert.equal((await search('가게' + i, '60.0.0.1')).body.ok, true);
+  const over = await search('가게 열한번째', '60.0.0.1');
+  assert.equal(over.code, 429); assert.equal(over.body.reason, 'slow_down');
+  assert.equal((await search('가게3', '60.0.0.1')).body.ok, true, '보관된 검색어는 한도와 무관');
+  mode = 'empty'; const none = await search('없는가게', '60.0.0.2');
+  assert.equal(none.body.ok, true); assert.deepEqual(none.body.items, []);
+  mode = 'broken'; assert.equal((await search('깨진응답', '60.0.0.2')).body.reason, 'unreadable');
+  mode = 'throw'; assert.equal((await search('시간초과', '60.0.0.2')).body.reason, 'unreadable');
+  mode = 'ok'; assert.equal((await search('깨진응답', '60.0.0.2')).body.ok, true, '실패는 보관하지 않음');
+  mode = '429'; const n = fetched.length;
+  assert.equal((await search('막힘', '60.0.0.3')).body.reason, 'cooldown');
+  assert.ok(srv.state.cooldownUntil > srv.state.now(), '차단되면 쉬기 시작');
+  mode = 'ok'; assert.equal((await search('쉬는중', '60.0.0.3')).body.reason, 'cooldown');
+  assert.equal(fetched.length, n + 1, '쉬는 동안 네이버를 부르지 않음');
+});
+
+// ---------- 코덱스 R3 ----------
+test('R3-01 코드 훑기: 오답 한도 뒤에는 맞는 코드가 섞여 있어도 열리지 않는다', async () => {
+  reset(); fakeLlm();
+  srv.writeCache('660', facts('660')); await analyze('660'); await extrasDone();
+  let opened = 0;
+  for (let n = 0; n < 60; n++) { const code = n === 40 ? '5678' : String(7000 + n); const r = await unlock('660', code, '70.0.0.1'); if (r.body.ok) opened += 1; }
+  assert.equal(opened, 0);
+  srv.state.tick(61_000);
+  assert.equal((await unlock('660', '5678', '70.0.0.1')).body.ok, true, '1분 뒤 정상 사용자는 열 수 있음');
+});
+
+test('R3-09 같은 사람이 다음 날 다시 열면 그날 집계에도 잡힌다', async () => {
+  reset(); fakeLlm();
+  srv.writeCache('661', facts('661')); await analyze('661'); await extrasDone();
+  await unlock('661', '1234'); await unlock('661', '1234');
+  srv.state.tick(24 * 3600 * 1000);
+  await unlock('661', '1234');
+  const days = Object.values(ST.aggregate().days).map((d) => d.unlock).filter(Boolean);
+  assert.deepEqual(days, [1, 1]);
 });
