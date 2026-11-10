@@ -27,7 +27,7 @@ const now = Date.now();
 const day = (i) => new Date(now - (i * 3 + 2) * 86400000 + 9 * 3600000).toISOString().slice(0, 10);
 function facts(id, over = {}) {
   return {
-    placeId: val(String(id)), name: val('키세카츠 견본점'), category: val('돈가스'), placeType: 'restaurant', district_tokens: val(['강남구', '강남대로']),
+    placeId: val(String(id)), name: val('맛있는식당 견본점'), category: val('돈가스'), placeType: 'restaurant', district_tokens: val(['강남구', '강남대로']),
     menus: val([{ name: '히레카츠 정식', price: val('14900'), order: 0 }, { name: '나고야 미소카츠', price: val('15900'), order: 1 }, { name: '가라아게', price: val('8900'), order: 2 }]),
     reviewStats: val({ totalCount: 412, avgRating: 4.7, menus: [{ name: '히레카츠', count: 60 }], votedKeywords: [{ name: '음식이 맛있어요', count: 300 }, { name: '혼밥하기 좋아요', count: 120 }, { name: '친절해요', count: 110 }], votedTotal: 900, themes: [] }),
     reviews: val(bodies.map((b, i) => ({ id: `${id}-${i}`, body: b, rating: i % 7 === 3 ? 4 : 5, visited: day(i), created: day(i), votedKeywords: [], visitCategories: i < 7 ? ['혼자'] : i < 12 ? ['연인・배우자'] : [] }))),
@@ -42,8 +42,8 @@ srv.writeCache('900000003', facts('900000003', { name: val('견본 헤어'), cat
 srv.state.fetchImpl = async (url) => {
   const q = decodeURIComponent((String(url).match(/query=([^&]*)/) || [])[1] || '').replace(/\+/g, ' ');
   const items = /없는/.test(q) ? [] : [
-    { id: '900000001', name: '키세카츠 견본점', category: '돈가스', commonAddress: '서울 강남구 역삼동', roadAddress: '강남대로 1', visitorReviewCount: '412' },
-    { id: '900000002', name: '키세카츠 새로 연 점', category: '돈가스', commonAddress: '서울 종로구 운니동', roadAddress: '율곡로 2', visitorReviewCount: '3' },
+    { id: '900000001', name: '맛있는식당 견본점', category: '돈가스', commonAddress: '서울 강남구 역삼동', roadAddress: '강남대로 1', visitorReviewCount: '412' },
+    { id: '900000002', name: '맛있는식당 새로 연 점', category: '돈가스', commonAddress: '서울 종로구 운니동', roadAddress: '율곡로 2', visitorReviewCount: '3' },
     { id: '900000003', name: '견본 헤어', category: '미용실', commonAddress: '서울 강남구 신사동', roadAddress: '논현로 3', visitorReviewCount: '88' },
   ];
   const state = { ROOT_QUERY: { 'placeList({})': { businesses: { items: items.map((it) => ({ __ref: 'B:' + it.id })) } } } };
