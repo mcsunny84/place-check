@@ -8,6 +8,7 @@ process.env.PLACE_CACHE_DIR = path.join(require('node:os').tmpdir(), 'place-chec
 process.env.PLACE_STATS_FILE = path.join(require('node:os').tmpdir(), 'place-check-test-cache', 'coupons.jsonl');
 fs.mkdirSync(process.env.PLACE_CACHE_DIR, { recursive: true });
 const srv = require('../server');
+process.env.PERSONA_CODES = 'test-open'; // 결과 잠금: 기본 요청은 코드를 넣은 상태로(잠금 자체는 맨 아래 테스트)
 
 const FX = path.join(__dirname, 'fixtures');
 const home = fs.readFileSync(path.join(FX, 'kise-anguk-home.html'), 'utf8');
@@ -44,7 +45,7 @@ const okPlan = (url, n, opts) => /graphql/.test(url) ? { status: 200, text: isCo
 function req(url, ip = '1.1.1.1', extra = {}) {
   return new Promise((resolve) => {
     const res = { writeHead(code) { this.code = code; }, end(body) { resolve({ code: this.code, body: JSON.parse(body) }); } };
-    srv.handleCheck({ headers: { 'x-forwarded-for': ip }, socket: {} }, res, JSON.stringify({ url, ...extra }));
+    srv.handleCheck({ headers: { 'x-forwarded-for': ip }, socket: {} }, res, JSON.stringify({ url, code: 'test-open', ...extra }));
   });
 }
 const URL1 = 'https://m.place.naver.com/restaurant/2086785604/home';
@@ -301,4 +302,15 @@ test('obtainFacts: 직접 캐시 hit만 cacheHit=true', async () => {
   assert.equal(a.cacheHit, false); assert.ok(a.facts);
   const b = await srv.obtainFacts(parsed, '9.9.9.9');
   assert.equal(b.cacheHit, true); assert.equal(b.position, 0);
+});
+
+test('결과 잠금: 코드 없으면 점수·할 일만, 틀린 코드는 bad_code, 맞으면 전체', async () => {
+  resetState(); fakeFetch(okPlan); srv.state.lastFetchStart = 0;
+  const open = await req(URL1);
+  assert.equal(open.body.locked, false); assert.ok(open.body.coupons);
+  const locked = await req(URL1, '1.1.1.1', { code: undefined });
+  assert.equal(locked.body.locked, true); assert.ok(locked.body.result_v2);
+  assert.equal(locked.body.answers, undefined); assert.equal(locked.body.result, undefined);
+  const wrong = await req(URL1, '1.1.1.1', { code: 'nope' });
+  assert.equal(wrong.body.locked, true); assert.equal(wrong.body.code_error, 'bad_code');
 });
