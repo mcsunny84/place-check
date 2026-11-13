@@ -12,6 +12,12 @@
   section.res { margin-top: 44px; }
   .card + .card { margin-top: 14px; }
   .hint { color: var(--muted); font-size: 13px; margin-top: 6px; word-break: keep-all; }
+  .cands { margin-top: 14px; }
+  .cands h3 { font-size: 15px; font-weight: 800; margin: 0 0 6px; }
+  .cand { display: block; width: 100%; text-align: left; background: #fff; border: 1.5px solid var(--line, #e5e8eb); border-radius: 12px; padding: 12px 14px; margin-top: 8px; cursor: pointer; font: inherit; color: inherit; }
+  .cand:hover, .cand:focus-visible { border-color: currentColor; }
+  .cand b { display: block; font-size: 15px; }
+  .cand span { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
   .err { color: var(--accent-ink); font-size: 15px; font-weight: 700; }
   .actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
   select.f { width: 100%; background: var(--paper-2); color: var(--ink); border: 1.5px solid transparent; padding: 13px 14px; font-size: 16px; font-family: var(--font-sans); outline: none; border-radius: var(--radius-s); }
@@ -217,16 +223,17 @@
   <section id="tab-auto">
     <p class="kicker">네이버 플레이스 무료 진단</p>
     <h1 class="hero">우리 가게 플레이스, <em>지금 몇 점</em>일까요?</h1>
-    <p class="sub">주소만 붙여넣으면 1분 안에 점수·할 일 3가지·키워드·리뷰 분석까지. 같은 식당 사장이 만들었어요.</p>
+    <p class="sub">가게 이름만 넣으면 1분 안에 점수·할 일 3가지·키워드·리뷰 분석까지. 같은 식당 사장이 만들었어요.</p>
 
     <div class="card" style="margin-top: 32px;">
-      <label class="f" for="url">플레이스 주소</label>
-      <input class="f" type="text" id="url" placeholder="예) https://m.place.naver.com/restaurant/1234567890/home  또는 naver.me/… 공유 링크">
-      <p class="hint">네이버 지도에서 내 가게 → 공유 → 링크 복사 → 여기 붙여넣기</p>
+      <label class="f" for="url">가게 이름 (동네를 같이 쓰면 더 잘 찾아요)</label>
+      <input class="f" type="text" id="url" enterkeyhint="search" autocomplete="off" maxlength="300" placeholder="예) 맛있는식당 강남역">
+      <p class="hint">네이버 플레이스 주소나 naver.me 공유 링크를 붙여넣어도 돼요.</p>
       <div class="actions">
         <p id="status" class="muted" style="margin-right:auto"></p>
         <button class="go" id="go">검사하기</button>
       </div>
+      <div id="cands" class="cands" hidden></div>
     </div>
     <div id="auto-result"></div>
   </section>
@@ -630,8 +637,8 @@
 
   // ---------- 자동 진단 ----------
   let last = null, lastUrl = '', seq = 0, refreshTimer = null;
-  async function runCheck(refresh) {
-    const url = refresh ? lastUrl : $('#url').value.trim(); if (!url) return; // refresh는 지금 보고 있는 매장 기준(입력창 편집 중이어도)
+  async function runCheck(refresh, picked) {
+    const url = refresh ? lastUrl : (picked || $('#url').value.trim()); if (!url) return; // refresh는 지금 보고 있는 매장 기준(입력창 편집 중이어도)
     const my = ++seq; // 연타·URL 변경 시 마지막 요청만 화면에
     $('#go').disabled = true;
     $('#status').innerHTML = '<span class="spin"></span>네이버에서 정보를 읽는 중… (최대 90초)';
@@ -650,7 +657,35 @@
     last = data; lastUrl = url;
     renderAuto();
   }
-  $('#go').addEventListener('click', () => runCheck(false));
+  // 가게 이름 → 후보 고르기 (주소·공유 링크면 바로 검사)
+  const isPlaceUrl = (q) => /^https?:\/\//i.test(q) || /(naver\.me|place\.naver\.com|map\.naver\.com)\//i.test(q);
+  let searchSeq = 0;
+  async function findOrCheck() {
+    const q = $('#url').value.trim(); const box = $('#cands');
+    box.hidden = true; box.innerHTML = '';
+    if (!q) { $('#status').textContent = '가게 이름을 넣어 주세요.'; return; }
+    if (isPlaceUrl(q)) return runCheck(false, /^https?:/i.test(q) ? q : 'https://' + q.replace(/^[^a-z]*/i, ''));
+    const my = ++searchSeq; seq++; // 진행 중이던 검사 결과는 버린다
+    $('#go').disabled = true; $('#auto-result').innerHTML = '';
+    $('#status').innerHTML = '<span class="spin"></span>가게를 찾는 중…';
+    let r; try { const res = await fetch('/api/persona/search', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ q }) }); r = await res.json(); } catch (e) { r = { ok:false, reason:'network' }; }
+    if (my !== searchSeq) return;
+    $('#go').disabled = false; $('#status').textContent = '';
+    const M = { too_short:'가게 이름을 두 글자 이상 넣어 주세요.', too_long:'이름이 너무 길어요. 가게 이름과 동네만 넣어 주세요.', cooldown:'지금은 네이버에서 찾을 수 없어요. 잠시 후 다시 해 주세요.', slow_down:'너무 자주 찾았어요. 1분 뒤 다시 해 주세요.' };
+    if (!r || !r.ok) { $('#status').textContent = M[r && r.reason] || '가게를 찾지 못했어요. 잠시 후 다시 하거나 플레이스 주소를 붙여넣어 주세요.'; return; }
+    if (!r.items.length) { $('#status').textContent = '맞는 가게가 없어요. 동네 이름을 같이 넣어 보세요. 예) 맛있는식당 강남역'; return; }
+    box.innerHTML = `<h3>${r.items.length === 1 ? '이 가게가 맞나요?' : '어느 가게인가요?'}</h3>` + r.items.map((it, i) => {
+      const sub = [it.category, it.address].filter(Boolean).join(' · ') + (it.reviews != null ? ' · 리뷰 ' + Number(it.reviews).toLocaleString('ko-KR') : '');
+      return `<button type="button" class="cand" data-i="${i}"><b>${esc(it.name)}</b>${sub ? `<span>${esc(sub)}</span>` : ''}</button>`;
+    }).join('') + '<p class="hint">찾는 가게가 없으면 동네 이름을 같이 넣어 다시 찾아보세요.</p>';
+    box.querySelectorAll('.cand').forEach((b) => b.addEventListener('click', () => {
+      const it = r.items[Number(b.dataset.i)]; if (!it || !/^\d{1,20}$/.test(String(it.id))) return;
+      box.hidden = true; runCheck(false, 'https://m.place.naver.com/restaurant/' + it.id + '/home');
+    }));
+    box.hidden = false;
+  }
+  $('#go').addEventListener('click', findOrCheck);
+  $('#url').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); findOrCheck(); } });
   function refreshBtn(d) {
     const age = (Date.now() - Date.parse(d.place.fetched_at || 0)) / 60000;
     const wait = age < 10 ? Math.ceil(10 - age) : 0;
