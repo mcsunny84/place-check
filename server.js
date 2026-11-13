@@ -496,8 +496,44 @@ async function handleCheck(req, res, body) {
   const refresh = input.refresh === true;
   const r = await obtainFacts(parsed, ip, { refresh });
   if (r.fallback) { if (r.counted) bump('fallback:' + r.fallback); return send(res, r.status, { mode: 'fallback', reason: r.fallback }); }
-  if (r.cacheHit) { bump('cache'); const out = await buildResponse(r.facts, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; return send(res, 200, out); }
-  return send(res, 200, await buildResponse(r.facts, asOf, r.position));
+  const gate = checkCode(req, input.code); // 코드 확인은 수집 뒤에 — 결과가 없는데 오답 횟수만 쌓이지 않게
+  let out;
+  if (r.cacheHit) { bump('cache'); out = await buildResponse(r.facts, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; }
+  else out = await buildResponse(r.facts, asOf, r.position);
+  if (gate.ok) return send(res, 200, { ...out, locked: false });
+  return send(res, 200, { ...lockResponse(out), code_error: gate.reason || null });
+}
+
+// ---------- 결과 잠금(오픈채팅 코드) ----------
+// 코드 없이 보내는 것: 점수·영역·할 일 목록·순위 + 1번 할 일 샘플에 필요한 최소 자료. 나머지(키워드·상세설명·리뷰 분석·쿠폰·v1 체크)는 서버에서 뺀다.
+// 코드는 손님 카드와 같은 PERSONA_CODES. 오답 한도도 같은 것을 쓴다.
+function checkCode(req, code) {
+  if (code == null || code === '') return { ok: false };
+  if (typeof code !== 'string' || code.length > 20) return { ok: false, reason: 'bad_code' };
+  const ip = clientIp(req); const fails = codeFails(ip);
+  const ok = ST.codeOk(code); const vkey = `${ip}|${code.trim()}`;
+  if (fails.length >= CODE_FAIL_LIMIT && !(ok && state.codeVerified.has(vkey))) return { ok: false, reason: 'slow_down' };
+  if (!ok) { fails.push(state.now()); return { ok: false, reason: 'bad_code' }; }
+  if (state.codeVerified.size > 5000) state.codeVerified.clear();
+  state.codeVerified.add(vkey);
+  return { ok: true };
+}
+function lockResponse(out) {
+  const r2 = out.result_v2 || {}; const first = (r2.todos || [])[0]; const id = first && first.id;
+  const lean = { mode: out.mode, as_of: out.as_of, queued_position: out.queued_position, cache: out.cache, place: out.place, result_v2: out.result_v2, ranks: out.ranks, locked: true };
+  if (id === 'K1' && out.keywords) {
+    const kw = out.keywords; const cur = kw.current || [];
+    const cand = [...((kw.llm && kw.llm.keywords) || []), ...(kw.recommendations || [])].filter((k) => k && k.keyword && (k.volume || 0) >= 100 && !cur.includes(k.keyword));
+    const uniq = [...new Map(cand.map((k) => [k.keyword.replace(/\s+/g, ''), k])).values()].slice(0, 2).map((k) => ({ keyword: k.keyword, volume: k.volume }));
+    lean.keywords = { current: cur, diagnosis: (kw.diagnosis || []).map((x) => ({ keyword: x.keyword, labels: x.labels || [] })), llm: { keywords: uniq }, recommendations: [] };
+  }
+  if (id === 'R4' && out.insight && out.insight.strengths) lean.insight = { strengths: out.insight.strengths.slice(0, 1) };
+  if ((id === 'F1' || id === 'F2') && out.coupons && out.coupons.coupons) lean.coupons = { coupons: out.coupons.coupons.slice(0, 1) };
+  if (/^T[1-5]$/.test(id || '') && out.description) {
+    const d = out.description; const add = (d.llm && d.llm.add && d.llm.add[0]) || (d.analysis && d.analysis.add && d.analysis.add[0]);
+    if (add) lean.description = { llm: { add: [add] } };
+  }
+  return lean;
 }
 
 // 사실(facts) 확보: 캐시 → 쿨다운·시험 상태 → IP 한도 → 큐 합류·대기. /api/check와 손님 카드가 같이 쓴다.
@@ -576,6 +612,8 @@ async function handleShare(req, res, body) {
   let input; try { input = JSON.parse(body || '{}'); } catch { return send(res, 400, { ok: false }); }
   const placeId = /^\d{1,20}$/.test(String(input.placeId)) ? String(input.placeId) : null;
   if (!placeId) return send(res, 400, { ok: false, reason: 'bad_request' });
+  const gate = checkCode(req, input.code); // 공유 리포트는 전체 결과라 코드가 있어야(잠금 우회 방지)
+  if (!gate.ok) return send(res, 200, { ok: false, reason: gate.reason || 'locked' });
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   if (!ipAllowed(ip, state.leadIpLog, LEAD_IP_LIMIT)) return send(res, 429, { ok: false, reason: 'ip_limit' });
   const r = await makeReport(placeId, kstDate(state.now()));

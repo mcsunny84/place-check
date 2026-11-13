@@ -13,6 +13,15 @@
   .card + .card { margin-top: 14px; }
   .hint { color: var(--muted); font-size: 13px; margin-top: 6px; word-break: keep-all; }
   .cands { margin-top: 14px; }
+  .fix.locked { background: #f6f7f9; color: var(--muted); }
+  .fix.locked a { color: inherit; font-weight: 700; }
+  .lockcard { margin-top: 18px; border: 2px solid #fee500; background: #fffde8; border-radius: 16px; padding: 20px; }
+  .lockcard h3 { font-size: 18px; margin: 0 0 6px; }
+  .lockcard p { margin: 0 0 10px; word-break: keep-all; }
+  .lockcard .kakao { display: inline-block; background: #fee500; color: #191919; font-weight: 800; border-radius: 10px; padding: 11px 16px; text-decoration: none; }
+  .lockcard form { display: flex; gap: 8px; margin-top: 14px; }
+  .lockcard form input { flex: 1; min-width: 0; }
+  .lockcard .err { margin-top: 8px; }
   .cands h3 { font-size: 15px; font-weight: 800; margin: 0 0 6px; }
   .cand { display: block; width: 100%; text-align: left; background: #fff; border: 1.5px solid var(--line, #e5e8eb); border-radius: 12px; padding: 12px 14px; margin-top: 8px; cursor: pointer; font: inherit; color: inherit; }
   .cand:hover, .cand:focus-visible { border-color: currentColor; }
@@ -505,9 +514,27 @@
     const head = `<div class="store"><h2>${esc(p.name)}</h2><span class="meta">${esc(p.category || '')} · ${esc(p.district || '')} · ${esc(kst(p.fetched_at).slice(0, 16))} 읽음</span></div>
 <div class="card" style="margin-top:12px"><div class="sum">${V.gauge(r.score, r.grade, bench)}<div><p class="lead">${lead}${top.length ? ` 아래 ${top.length}가지만 하면 <b>${projected}점</b>까지 올라요.` : ''}</p><p class="sub2">7개 영역 100점. 등록만으론 60점 안팎, 리뷰 답글·소식·키워드까지 운영해야 75점(A)을 넘어요.</p><div class="pillrow">${pills}</div></div></div></div>`;
     const acts = top.map((t, i) => { const s = sampleFor(t, d); const it = (r.items || []).find((x) => x.id === t.id) || {};
-      return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(shortWhy(it))}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div><div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div></div>`; }).join('');
+      const fix = d.locked && i > 0 ? `<div class="fix locked"><div class="t">이렇게 바꾸세요</div><div><a href="#lock" onclick="var e=document.getElementById('lock');if(e){e.scrollIntoView({behavior:'smooth',block:'center'});}return false;">오픈채팅 코드를 넣으면 이 방법이 열려요 ↓</a></div></div>`
+        : `<div class="fix"><div class="t">${esc(s.t)}</div><div>${s.body}</div>${s.more ? `<div class="more">${esc(s.more)}</div>` : ''}</div>`;
+      return `<div class="act"><div class="n">${i + 1}</div><div><h3>${esc(t.label)}</h3><p class="why">${esc(shortWhy(it))}${t.next ? ` · ${esc(t.next)}` : ''}</p></div><div class="gain">+${n1(t.lost)}점<small>${i === 0 ? '제일 큰 효과' : '최대'}</small></div>${fix}</div>`; }).join('');
     const actsHtml = top.length ? `<h2 class="h">지금 할 일 ${top.length}가지</h2><p class="hsub">효과 큰 순서예요. 각각 "이렇게 바꾸세요" 샘플을 넣어 뒀어요.</p><div class="acts">${acts}</div>` : '';
-    return head + renderRanks(d) + actsHtml + (opts.report ? renderReportContact(d) : renderLeadForm(d));
+    return head + renderRanks(d) + actsHtml + (d.locked ? renderLock() : '') + (opts.report ? renderReportContact(d) : renderLeadForm(d));
+  }
+  function renderLock() {
+    return `<div class="lockcard" id="lock"><h3>나머지는 오픈채팅 코드로 열려요</h3><p>AI로 장사 공부하는 사장님들 오픈채팅방 공지에 코드가 있어요. 넣으면 2·3번 할 일 방법, 대표키워드 분석, 상세설명 원고, 리뷰 분석까지 전부 보여요.</p><a class="kakao" href="${CHAT_URL}" target="_blank" rel="noopener">오픈채팅 들어가서 코드 보기</a><form id="lock-form" autocomplete="off"><input class="f" id="lock-code" inputmode="numeric" maxlength="20" placeholder="코드 입력"><button class="go" type="submit">열기</button></form><p class="err" id="lock-err"></p><p class="muted" style="margin:6px 0 0">아래에서 전화 상담을 신청해도 전체 리포트 링크를 드려요.</p></div>`;
+  }
+  function bindLock() {
+    const f = $('#lock-form'); if (!f) return;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = $('#lock-code').value.trim(); const err = $('#lock-err'); err.textContent = '';
+      if (!code) { err.textContent = '코드를 넣어 주세요.'; return; }
+      const btn = f.querySelector('button'); btn.disabled = true; btn.textContent = '여는 중…';
+      let j; try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url: lastUrl, code }) }); j = await res.json(); } catch (x) { j = null; }
+      btn.disabled = false; btn.textContent = '열기';
+      if (j && j.mode === 'auto' && j.locked === false) { savedCode(code); last = j; renderAuto(); return; }
+      err.textContent = j && j.code_error === 'slow_down' ? '너무 여러 번 틀렸어요. 1분 뒤 다시 해 주세요.' : j && j.code_error === 'bad_code' ? '코드가 맞지 않아요. 오픈채팅 공지의 최신 코드를 확인해 주세요.' : '지금 열 수 없어요. 잠시 후 다시 해 주세요.';
+    });
   }
   // 키워드 순위: 손님이 검색하면 우리가 몇 번째인지 + 상위 5곳과 리뷰 비교 + 광고 자리. 가격은 넣지 않는다.
   function renderRanks(d) {
@@ -637,6 +664,10 @@
 
   // ---------- 자동 진단 ----------
   let last = null, lastUrl = '', seq = 0, refreshTimer = null;
+  // 결과 잠금: 오픈채팅 공지 코드(손님 카드와 같은 코드·같은 저장 칸 — 한 번 열면 둘 다 열림)
+  const CHAT_URL = 'https://open.kakao.com/o/gSiKIHVi';
+  const CODE_KEY = 'abc_persona_code';
+  const savedCode = (v) => { try { if (v === undefined) return localStorage.getItem(CODE_KEY) || ''; if (v === null) localStorage.removeItem(CODE_KEY); else localStorage.setItem(CODE_KEY, v); } catch (e) { /* 저장 못 하는 브라우저 */ } return ''; };
   async function runCheck(refresh, picked) {
     const url = refresh ? lastUrl : (picked || $('#url').value.trim()); if (!url) return; // refresh는 지금 보고 있는 매장 기준(입력창 편집 중이어도)
     const my = ++seq; // 연타·URL 변경 시 마지막 요청만 화면에
@@ -644,7 +675,7 @@
     $('#status').innerHTML = '<span class="spin"></span>네이버에서 정보를 읽는 중… (최대 90초)';
     $('#auto-result').innerHTML = '';
     let data;
-    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh }) }); data = await res.json(); }
+    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh, code: savedCode() || undefined }) }); data = await res.json(); }
     catch (e) { data = { mode:'fallback', reason:'network' }; }
     if (my !== seq) return;
     $('#go').disabled = false;
@@ -654,6 +685,7 @@
       $('#auto-result').innerHTML = `<div class="card" style="margin-top:14px"><p class="err">${esc(R[data.reason] || ('실패: ' + data.reason))}</p><div class="actions" style="justify-content:flex-start"><button class="ghost" onclick="document.querySelector('.topbar nav a[data-tab=self]').click()">직접 체크로 가기</button></div></div>`;
       return;
     }
+    if (data.code_error === 'bad_code') savedCode(null); // 코드가 바뀌었으면 지워서 다음엔 입력 칸이 보이게
     last = data; lastUrl = url;
     renderAuto();
   }
@@ -731,14 +763,15 @@
   function renderAuto() {
     const d = last; const p = d.place;
     let html;
-    if (d.result_v2) html = renderSummary(d) + `<h2 class="h">자세히 보기</h2><p class="hsub">근거 숫자와 그래프예요. 필요한 것만 펼쳐 보세요.</p>` + renderDetails(d, d.result, d.todos, d.auto, d.answers);
+    if (d.result_v2 && d.locked) html = renderSummary(d) + `<div class="topact" style="margin-top:16px">${refreshBtn(d)}</div>`;
+    else if (d.result_v2) html = renderSummary(d) + `<h2 class="h">자세히 보기</h2><p class="hsub">근거 숫자와 그래프예요. 필요한 것만 펼쳐 보세요.</p>` + renderDetails(d, d.result, d.todos, d.auto, d.answers);
     else {
       html = placeCard(p, `<span class="k">읽은 시각</span><span>${esc(kst(p.fetched_at))} · 기준일 ${esc(d.as_of)}</span></div>${refreshBtn(d)}</div>`) + renderAutoScore(d, d.result, d.todos, d.auto, d.answers);
       if (d.supplement && d.supplement.length) html += `<section class="res"><div class="sec-head"><span class="kr">자동으로 못 읽은 것</span></div><form id="sup-form"><div class="card"><div class="form-grid">${d.supplement.map((id) => qHtml(id, 'sup_')).join('')}</div><p class="notice">${esc(SAVE_NOTE)}</p><div class="actions"><button class="ghost" type="button" id="sup-go">다시 계산</button></div></div></form></section>`;
       html += renderCoupons(d.coupons) + renderInsight(d.insight) + kwSection(d.keywords) + draftSection(d);
     }
     $('#auto-result').innerHTML = html;
-    bindRefresh(d); bindSup(d, {}); bindLead(d);
+    bindRefresh(d); bindSup(d, {}); bindLead(d); bindLock();
     $('#auto-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   // ---------- 리포트 모드: /r/<token> ----------
