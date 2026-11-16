@@ -73,12 +73,12 @@ function cleanAnswers(raw) {
 }
 
 // 일별 이용 집계(개인정보 없음): 페이지 열람·검사 요청·캐시 hit·폴백 사유, 방문자는 IP 해시 앞 10자로 하루 단위 유일 수만
-function bump(kind, ip) {
+function bump(kind, ip, ch) {
   try {
     let h = {}; try { h = JSON.parse(fs.readFileSync(HITS_FILE, 'utf8')); } catch { /* 없음 */ }
     const day = kstDate(state.now());
     const d = h[day] = h[day] || { views: 0, checks: 0, cache: 0, fallback: {}, visitors: [] };
-    if (kind === 'views') d.views += 1;
+    if (kind === 'views') { d.views += 1; const c = ST.cleanCh(ch); if (c) { d.views_ch = d.views_ch || {}; d.views_ch[c] = (d.views_ch[c] || 0) + 1; } }
     else if (kind === 'checks') d.checks += 1;
     else if (kind === 'cache') d.cache += 1;
     else if (kind.startsWith('fallback:')) { const r = kind.slice(9); d.fallback[r] = (d.fallback[r] || 0) + 1; }
@@ -473,7 +473,7 @@ function send(res, code, body, type = 'application/json; charset=utf-8') {
 function serveStatic(req, res) {
   let p = req.url.split('?')[0];
   if (p === '/') p = '/index.html';
-  if (p === '/index.html') bump('views', (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim());
+  if (p === '/index.html') { let ch = null; try { ch = new URL(req.url, 'http://x').searchParams.get('ch'); } catch { /* 무시 */ } bump('views', (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(), ch); }
   const file = p.startsWith('/lib/') ? path.join(LIB, p.slice(5)) : path.join(PUBLIC, p);
   if (!file.startsWith(PUBLIC) && !file.startsWith(LIB)) return send(res, 404, 'not found', 'text/plain');
   fs.readFile(file, (err, buf) => {
@@ -500,8 +500,41 @@ async function handleCheck(req, res, body) {
   let out;
   if (r.cacheHit) { bump('cache'); out = await buildResponse(r.facts, asOf, 0); out.cache = { hit: true, refresh_denied: refresh }; }
   else out = await buildResponse(r.facts, asOf, r.position);
+  logCheck({ type: input.unlock === true ? (gate.ok ? 'unlock' : 'unlock_fail') : 'check', placeId: out.place && out.place.id, name: out.place && out.place.name, category: out.place && out.place.category, score: out.result_v2 && out.result_v2.score, cache: !!r.cacheHit, coded: gate.ok, vid: input.vid, ch: input.ch });
   if (gate.ok) return send(res, 200, { ...out, locked: false });
   return send(res, 200, { ...lockResponse(out), code_error: gate.reason || null });
+}
+
+// ---------- 메인 체크 사용 기록 (검사·코드 해제·채널) ----------
+// 한 줄씩 data/stats/check_events.jsonl. 개인정보 없음(vid는 브라우저 무작위 값).
+const CHECK_EVENTS_FILE = path.join(path.dirname(STATS_FILE), 'check_events.jsonl');
+function logCheck(ev) {
+  try {
+    const s = (x, n) => (typeof x === 'string' ? x.slice(0, n) : null);
+    const line = { ts: new Date(state.now()).toISOString(), type: ev.type, placeId: /^\d{1,20}$/.test(String(ev.placeId || '')) ? String(ev.placeId) : null, name: s(ev.name, 60), category: s(ev.category, 40), score: Number.isFinite(ev.score) ? ev.score : null, cache: !!ev.cache, coded: !!ev.coded, vid: ST.cleanVid(ev.vid), ch: ST.cleanCh(ev.ch) };
+    fs.mkdirSync(path.dirname(CHECK_EVENTS_FILE), { recursive: true });
+    fs.appendFileSync(CHECK_EVENTS_FILE, JSON.stringify(line) + '\n');
+  } catch { /* 기록 실패 무시 */ }
+}
+function checkStats() {
+  let lines = []; try { lines = fs.readFileSync(CHECK_EVENTS_FILE, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { /* 없음 */ }
+  let hits = {}; try { hits = JSON.parse(fs.readFileSync(HITS_FILE, 'utf8')); } catch { /* 없음 */ }
+  const days = {};
+  const day = (ts) => kstDate(Date.parse(ts));
+  for (const e of lines) {
+    const d = days[day(e.ts)] = days[day(e.ts)] || { check: 0, unlock: 0, unlock_fail: 0, coded_check: 0, stores: new Set(), vids: new Set(), ch: {} };
+    if (e.type in d) d[e.type] += 1;
+    if (e.type === 'check' && e.coded) d.coded_check += 1;
+    if (e.placeId) d.stores.add(e.placeId);
+    if (e.vid) d.vids.add(e.vid);
+    const c = e.ch || 'none'; d.ch[c] = (d.ch[c] || 0) + 1;
+  }
+  const out = {};
+  for (const k of new Set([...Object.keys(days), ...Object.keys(hits)])) {
+    const d = days[k]; const h = hits[k] || {};
+    out[k] = { views: h.views || 0, views_ch: h.views_ch || {}, visitors: (h.visitors || []).length, check: d ? d.check : 0, coded_check: d ? d.coded_check : 0, unlock: d ? d.unlock : 0, unlock_fail: d ? d.unlock_fail : 0, stores: d ? d.stores.size : 0, people: d ? d.vids.size : 0, ch: d ? d.ch : {} };
+  }
+  return { days: out, recent: lines.slice(-30).map(({ vid, ...rest }) => rest) };
 }
 
 // ---------- 결과 잠금(오픈채팅 코드) ----------
@@ -856,6 +889,10 @@ function createServer() {
       return snap ? send(res, 200, snap) : send(res, 404, { ok: false, reason: 'not_found' });
     }
     if (req.method === 'GET' && req.url.startsWith('/r/')) { req.url = '/index.html'; return serveStatic(req, res); } // 리포트 모드(클라이언트가 경로로 판단)
+    if (req.method === 'GET' && req.url.startsWith('/api/stats/check')) {
+      if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
+      return send(res, 200, checkStats());
+    }
     if (req.method === 'GET' && req.url.startsWith('/api/stats/leads')) {
       if (!adminOk(req)) return send(res, 404, 'not found', 'text/plain');
       let lines = [];

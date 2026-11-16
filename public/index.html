@@ -530,7 +530,7 @@
       const code = $('#lock-code').value.trim(); const err = $('#lock-err'); err.textContent = '';
       if (!code) { err.textContent = '코드를 넣어 주세요.'; return; }
       const btn = f.querySelector('button'); btn.disabled = true; btn.textContent = '여는 중…';
-      let j; try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url: lastUrl, code }) }); j = await res.json(); } catch (x) { j = null; }
+      let j; try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url: lastUrl, code, unlock: true, vid: VID, ch: CH }) }); j = await res.json(); } catch (x) { j = null; }
       btn.disabled = false; btn.textContent = '열기';
       if (j && j.mode === 'auto' && j.locked === false) { savedCode(code); last = j; renderAuto(); return; }
       err.textContent = j && j.code_error === 'slow_down' ? '너무 여러 번 틀렸어요. 1분 뒤 다시 해 주세요.' : j && j.code_error === 'bad_code' ? '코드가 맞지 않아요. 오픈채팅 공지의 최신 코드를 확인해 주세요.' : '지금 열 수 없어요. 잠시 후 다시 해 주세요.';
@@ -667,6 +667,9 @@
   // 결과 잠금: 오픈채팅 공지 코드(손님 카드와 같은 코드·같은 저장 칸 — 한 번 열면 둘 다 열림)
   const CHAT_URL = 'https://open.kakao.com/o/gSiKIHVi';
   const CODE_KEY = 'abc_persona_code';
+  // 사용 기록용: 어디서 왔는지(?ch=th|ig|chat|etc)와 브라우저 무작위 id(손님 카드와 같은 저장 칸)
+  const CH = (() => { try { const c = new URLSearchParams(location.search).get('ch'); return ['ig', 'th', 'chat', 'etc'].includes(c) ? c : undefined; } catch (e) { return undefined; } })();
+  const VID = (() => { try { let v = localStorage.getItem('abc_vid'); if (!/^[a-z0-9]{16}$/.test(v || '')) { v = Array.from({ length: 16 }, () => 'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]).join(''); localStorage.setItem('abc_vid', v); } return v; } catch (e) { return undefined; } })();
   const savedCode = (v) => { try { if (v === undefined) return localStorage.getItem(CODE_KEY) || ''; if (v === null) localStorage.removeItem(CODE_KEY); else localStorage.setItem(CODE_KEY, v); } catch (e) { /* 저장 못 하는 브라우저 */ } return ''; };
   async function runCheck(refresh, picked) {
     const url = refresh ? lastUrl : (picked || $('#url').value.trim()); if (!url) return; // refresh는 지금 보고 있는 매장 기준(입력창 편집 중이어도)
@@ -675,7 +678,7 @@
     $('#status').innerHTML = '<span class="spin"></span>네이버에서 정보를 읽는 중… (최대 90초)';
     $('#auto-result').innerHTML = '';
     let data;
-    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh, code: savedCode() || undefined }) }); data = await res.json(); }
+    try { const res = await fetch('/api/check', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, refresh: !!refresh, code: savedCode() || undefined, vid: VID, ch: CH }) }); data = await res.json(); }
     catch (e) { data = { mode:'fallback', reason:'network' }; }
     if (my !== seq) return;
     $('#go').disabled = false;
