@@ -853,8 +853,12 @@ function adminOk(req) {
   return !!process.env.ADMIN_TOKEN && token === process.env.ADMIN_TOKEN;
 }
 
+// 병원 홈페이지 AI 검색 점검(별도 주소). lib/hospital/server.js 가 Host로 나눠 받는다.
+const hospital = require('./lib/hospital/server').create({ send, clientIp, adminOk, fetchText: (u) => fetchText(u), isBlocked: (e) => e instanceof Blocked, inCooldown, startCooldown, now: () => state.now(), dataDir: process.env.HOSPITAL_DATA_DIR || path.dirname(STATS_FILE) });
+
 function createServer() {
   return http.createServer((req, res) => {
+    if (hospital.handle(req, res)) return;
     if (req.method === 'POST' && (req.url === '/api/check' || req.url === '/api/answers' || req.url === '/api/lead' || req.url === '/api/share')) {
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
@@ -926,4 +930,4 @@ if (require.main === module) {
   createServer().listen(PORT, () => console.log(`place-check http://localhost:${PORT}`));
 }
 
-module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, handlePersonaSearch, handlePersonaCollect, handlePersonaAnalyze, handlePersonaUnlock, clientIp, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
+module.exports = { REFRESH_MIN_MS, createServer, state, handleCheck, obtainFacts, handlePersonaSearch, handlePersonaCollect, handlePersonaAnalyze, handlePersonaUnlock, clientIp, hospital, buildResponse, collect, enqueue, pump, startCooldown, readCache, writeCache, CACHE_DIR };
