@@ -87,3 +87,20 @@ test('4대 AI: robots.txt를 확인하지 못하면 전부 확인 못 함, 없�
 test('사이트맵 주소 줄을 읽는다', () => {
   assert.deepEqual(R.sitemapUrls('Sitemap: https://a.kr/s1.xml\nsitemap: https://a.kr/s2.xml\nUser-agent: *'), ['https://a.kr/s1.xml', 'https://a.kr/s2.xml']);
 });
+
+test('악의적인 무늬(별표 반복)에도 바로 끝난다', () => {
+  const evil = 'User-agent: *\nDisallow: /' + '*a'.repeat(24) + 'b$\n';
+  const t0 = Date.now();
+  assert.equal(al(evil, 'OAI-SearchBot', '/' + 'a'.repeat(80)), true);
+  assert.equal(al('User-agent: *\nDisallow: /' + '*a'.repeat(200) + '\n', 'Yeti', '/' + 'a'.repeat(1500) + 'c'), false);
+  assert.equal(al('User-agent: *\nDisallow: /' + '*a'.repeat(200) + 'z$\n', 'Yeti', '/' + 'a'.repeat(1500) + 'c'), true);
+  assert.ok(Date.now() - t0 < 500, '걸린 시간 ' + (Date.now() - t0) + 'ms');
+});
+
+test('한글 경로와 %XX 표기를 같은 것으로 본다', () => {
+  assert.equal(al('User-agent: *\nDisallow: /진료', 'Yeti', new URL('https://a.kr/진료/피부').pathname), false);
+  assert.equal(al('User-agent: *\nDisallow: /%EC%A7%84%EB%A3%8C', 'Yeti', '/진료'), false);
+  assert.equal(al('User-agent: *\nDisallow: /~doctor', 'Yeti', '/%7Edoctor'), false);
+  assert.equal(al('User-agent: *\nDisallow: /a%2fb', 'Yeti', '/a%2Fb'), false);
+  assert.equal(al('User-agent: *\nDisallow: /a%2Fb', 'Yeti', '/a/b'), true, '묶인 / 는 풀지 않는다');
+});

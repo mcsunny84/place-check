@@ -61,13 +61,13 @@ test('잘 만든 홈페이지 → 높은 점수, 문 4개 열림', async () => {
   const a = await runAudit('https://raon.example', { fetcher: fake({
     'https://raon.example/': { body: GOOD_HOME, ms: 500 },
     'https://raon.example/robots.txt': { type: 'text/plain', body: 'User-agent: *\nAllow: /\nSitemap: https://raon.example/sitemap.xml\n' },
-    'https://raon.example/sitemap.xml': { type: 'application/xml', body: sitemap(60) },
+    'https://raon.example/sitemap.xml': { type: 'application/xml', body: sitemap(90) },
     'https://raon.example/doctor': { body: GOOD_DOCTOR },
     'https://raon.example/faq': { body: GOOD_FAQ },
   }, log) });
   assert.deepEqual(['chatgpt', 'claude', 'gemini', 'perplexity'].map((k) => a.doors[k].state), ['open', 'open', 'open', 'open']);
   assert.equal(a.structured.medical, true); assert.equal(a.doctors.verified, true);
-  assert.equal(a.faq.questions, 5); assert.equal(a.pages.count, 60);
+  assert.equal(a.faq.questions, 5); assert.equal(a.pages.count, 90);
   assert.equal(a.structured.person, true); assert.equal(a.structured.sameAs, true);
   assert.deepEqual(a.basic, { phone: true, address: true, hours: true });
   const s = scoreAudit(a);
@@ -182,4 +182,92 @@ test('글자 없이 다른 화면으로 넘기는 첫 주소(meta refresh·스�
   const out = await runAudit('away.example', { fetcher: fake({ 'https://away.example/': { body: '<html><head><meta http-equiv="refresh" content="0;url=https://other.example/"></head></html>' } }, log) });
   assert.equal(log.includes('https://other.example/'), false, '다른 사이트로는 따라가지 않는다');
   assert.equal(out.text.chars, 0);
+});
+
+test('AI 2곳 이상이 막히면 점수가 높아도 등급은 D', async () => {
+  const a = await runAudit('raon.example', { fetcher: fake({
+    'https://raon.example/': { body: GOOD_HOME },
+    'https://raon.example/robots.txt': { type: 'text/plain', body: 'User-agent: OAI-SearchBot\nDisallow: /\nUser-agent: PerplexityBot\nDisallow: /\n' },
+    'https://raon.example/doctor': { body: GOOD_DOCTOR },
+  }) });
+  const s = scoreAudit(a);
+  assert.ok(s.score >= 55, '점수 ' + s.score);
+  assert.deepEqual([s.grade, s.capped], ['D', true]);
+});
+
+test('R2: noindex는 정확한 지시어만, 다른 로봇 대상 지시는 전체로 보지 않는다', async () => {
+  const run = async (xr) => (await runAudit('h.example', { fetcher: fake({ 'https://h.example/': { body: GOOD_HOME, headers: { 'x-robots-tag': xr } } }) })).noindex;
+  assert.deepEqual(await run('max-image-preview:none'), { all: false, google: false, naver: false });
+  assert.deepEqual(await run('otherbot: nofollow, noindex'), { all: false, google: false, naver: false });
+  assert.deepEqual(await run('noindex, nofollow'), { all: true, google: false, naver: false });
+  assert.deepEqual(await run('googlebot: nofollow, noindex'), { all: false, google: true, naver: false });
+  assert.deepEqual(await run(['yeti: none', 'max-snippet:-1']), { all: false, google: false, naver: true });
+});
+
+test('R2: 사이트맵 — 물음표 주소는 따로 세고, &amp;를 풀고, 다른 사이트 주소는 세지 않는다', async () => {
+  const urls = (base, n) => Array.from({ length: n }, (_, i) => '<url><loc>' + base + i + '</loc></url>').join('');
+  const mk = (map) => runAudit('q.example', { fetcher: fake(Object.assign({ 'https://q.example/': { body: GOOD_HOME }, 'https://q.example/robots.txt': { type: 'text/plain', body: 'User-agent: *\nAllow: /\n' } }, map)) });
+  const a = await mk({ 'https://q.example/sitemap.xml': { type: 'application/xml', body: '<urlset>' + urls('https://q.example/view.php?id=', 50) + '</urlset>' } });
+  assert.equal(a.pages.count, 50);
+  const b = await mk({ 'https://q.example/sitemap.xml': { type: 'application/xml', body: '<urlset>' + urls('https://unrelated.example/p', 50) + '</urlset>' } });
+  assert.equal(b.pages.count, 0);
+  const c = await mk({
+    'https://q.example/sitemap.xml': { type: 'application/xml', body: '<sitemapindex><sitemap><loc>https://q.example/maps.php?part=1&amp;lang=ko</loc></sitemap><sitemap><loc>https://evil.example/s.xml</loc></sitemap></sitemapindex>' },
+    'https://q.example/maps.php?part=1&lang=ko': { type: 'application/xml', body: '<urlset>' + urls('https://www.q.example/t', 7) + '</urlset>' },
+  });
+  assert.equal(c.pages.count, 7);
+});
+
+test('R2: 구조화 정보 — 빈 값은 점수가 없고, 앞에 다른 조직이 있어도 병원 정보를 고른다', async () => {
+  const page = (ld) => '<html><head><title>가나의원 홈페이지</title><script type="application/ld+json">' + JSON.stringify(ld) + '</script></head><body><p>가나의원</p></body></html>';
+  const sd = async (ld) => { const a = await runAudit('s.example', { fetcher: fake({ 'https://s.example/': { body: page(ld) } }) }); return { sd: a.structured, pts: scoreAudit(a).items.find((x) => x.id === 'structured').got }; };
+  const empty = await sd({ '@type': 'MedicalClinic', name: [], address: {}, telephone: [], openingHours: [], sameAs: ['https://unrelated.invalid/'], employee: { '@type': 'Person' } });
+  assert.deepEqual(empty.sd.fields, { name: false, address: false, telephone: false, hours: false });
+  assert.equal(empty.sd.person, false);
+  assert.equal(empty.pts, 2 + 4 + 3, '형식 2 + 병원 종류 4 + 공식 채널 3');
+  const clinic = { '@type': 'MedicalClinic', name: '가나의원', address: { '@type': 'PostalAddress', streetAddress: '서울 강남구 강남대로 1' }, telephone: '02-555-0100', openingHoursSpecification: [{ dayOfWeek: 'Monday', opens: '10:00', closes: '19:00' }], sameAs: ['https://naver.me/x'], employee: { '@type': 'Person', name: '김가나' } };
+  const full = await sd({ '@graph': [{ '@type': 'Organization', name: 'Web publisher' }, clinic] });
+  assert.equal(full.pts, 18);
+});
+
+test('R2: Microdata로 적은 병원 정보도 같은 점수를 받는다', async () => {
+  const html = '<html><head><title>가나치과의원 홈페이지</title></head><body><div itemscope itemtype="https://schema.org/Dentist"><span itemprop="name">가나치과</span><div itemprop="address" itemscope itemtype="https://schema.org/PostalAddress"><span itemprop="streetAddress">서울 강남구 강남대로 1</span></div><span itemprop="telephone">02-555-0100</span><meta itemprop="openingHours" content="Mo-Fr 10:00-19:00"><a itemprop="sameAs" href="https://naver.me/x">네이버</a><div itemprop="employee" itemscope itemtype="https://schema.org/Person"><span itemprop="name">김가나</span></div></div></body></html>';
+  const a = await runAudit('m.example', { fetcher: fake({ 'https://m.example/': { body: html } }) });
+  assert.deepEqual(a.structured.fields, { name: true, address: true, telephone: true, hours: true });
+  assert.equal(scoreAudit(a).items.find((x) => x.id === 'structured').got, 18);
+});
+
+test('R2: 질문 — 메뉴의 FAQ 글자와 빈 FAQ 표시만으로는 점수가 없다', async () => {
+  const html = '<html><head><title>가나의원 홈페이지</title><script type="application/ld+json">{"@type":"FAQPage","mainEntity":[]}</script></head><body><a href="/faq">FAQ</a><p>아직도 고민하시나요?</p><p>왜 가나의원일까요?</p><p>수술이 두려우신가요?</p><p>회복이 걱정되시나요?</p><p>비용이 부담되시나요?</p></body></html>';
+  const a = await runAudit('f.example', { fetcher: fake({ 'https://f.example/': { body: html } }) });
+  assert.deepEqual([a.faq.questions, a.faq.schema], [0, false]);
+  assert.equal(scoreAudit(a).items.find((x) => x.id === 'faq').got, 0);
+});
+
+test('R2: 누르면 이동하는 버튼(onclick)은 자동 이동으로 보지 않는다', async () => {
+  const log = [];
+  const a = await runAudit('c.example', { fetcher: fake({
+    'https://c.example/': { body: '<html><body><img src="main.jpg"><a href="/login" onclick="location.href=\'/login\'">.</a><script>function go(){ location.href = "/member"; }</script></body></html>' },
+    'https://c.example/login': { body: GOOD_HOME }, 'https://c.example/member': { body: GOOD_HOME },
+  }, log) });
+  assert.equal(a.finalUrl, 'https://c.example/');
+  assert.equal(log.includes('https://c.example/member'), false);
+});
+
+test('R2: 프레임 안 화면은 그 화면의 주소·헤더로 본다', async () => {
+  const log = [];
+  const a = await runAudit('fr.example', { fetcher: fake({
+    'https://fr.example/': { body: '<html><head><title>옛날의원 홈페이지</title></head><frameset><frame src="/site/main.html"></frameset></html>' },
+    'https://fr.example/site/main.html': { body: '<html><body><p>전화 02-555-0100</p><a href="doctor.html">의료진 소개</a></body></html>', headers: { 'x-robots-tag': 'noindex' } },
+    'https://fr.example/site/doctor.html': { body: GOOD_DOCTOR },
+  }, log) });
+  assert.ok(log.includes('https://fr.example/site/doctor.html'));
+  assert.equal(a.doctors.verified, true);
+  assert.equal(a.noindex.all, true);
+});
+
+test('R2: 포트·계정이 붙은 주소는 받지 않는다', () => {
+  assert.equal(normalizeInput('https://clinic.example:444/'), null);
+  assert.equal(normalizeInput('https://user:pw@clinic.example/'), null);
+  assert.equal(normalizeInput('clinic.example.').hostname, 'clinic.example');
 });

@@ -319,6 +319,9 @@ footer b{color:var(--ink)}
 </div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-<script src="app.js"></script>
+<script>
+// 결과 링크(/r/...)에서도 같은 파일을 찾도록 기준 경로를 붙여 부른다
+(function(){var p=location.pathname,b=(p==="/hospital"||p.indexOf("/hospital/")===0)?"/hospital/":"/";var s=document.createElement("script");s.src=b+"app.js";document.body.appendChild(s);})();
+</script>
 </body>
 </html>

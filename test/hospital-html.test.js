@@ -73,3 +73,17 @@ test('모르는 인코딩은 null(확인 못 함), UTF-8은 그대로', () => {
 test('글자 수는 글자와 숫자만 센다', () => {
   assert.equal(H.countChars('진료 시간: 09~18시!'), 9);
 });
+
+test('R2: BOM이 헤더보다 먼저다, UTF-16도 읽는다', () => {
+  const utf8bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('<p>진료시간</p>')]);
+  assert.ok(H.decodeHtml(utf8bom, 'text/html; charset=euc-kr').text.includes('진료시간'));
+  const u16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('<p>진료시간</p>', 'utf16le')]);
+  const d = H.decodeHtml(u16, 'text/html');
+  assert.ok(d.text.includes('진료시간')); assert.equal(d.charset, 'utf-16le');
+});
+
+test('R2: Microdata 속성 이름과 안쪽 글자 스크립트를 모은다', () => {
+  const s = H.scan('<div itemscope itemtype="https://schema.org/Dentist"><span itemprop="name">가나</span><meta itemprop="openingHours" content="Mo 10:00-19:00"></div><script>location.href="/m";</script>');
+  assert.ok(s.itemprops.name && s.itemprops.openinghours);
+  assert.deepEqual(s.inlineScripts, ['location.href="/m";']);
+});

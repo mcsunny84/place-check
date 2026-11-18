@@ -50,6 +50,11 @@ test('병원 주소에서는 병원 화면만, 플레이스 체크 경로는 없
   const a = await call('GET', '/');
   assert.equal(a.status, 200); assert.match(a.text, /AI 검색 점검/);
   assert.equal((await call('GET', '/privacy')).status, 200);
+  const rep = await call('GET', '/r/abcdefgh12');
+  assert.equal(rep.status, 200); assert.match(rep.text, /AI 검색 점검/);
+  assert.doesNotMatch(rep.text, /src="app.js"/, '결과 링크 경로에서는 상대 주소 스크립트를 못 찾는다');
+  const js = await call('GET', '/app.js');
+  assert.equal(js.status, 200); assert.match(js.headers['content-type'], /javascript/);
   assert.equal((await call('GET', '/persona')).status, 404);
   assert.equal((await call('GET', '/lib/copy.js')).status, 404);
   assert.equal((await call('POST', '/api/check', { body: { url: 'x' } })).status, 404);
@@ -78,7 +83,7 @@ test('운영 주소가 없을 때만 localhost /hospital/ 로 연다', async () 
 
 test('점검: 결과·공유 링크, 같은 주소 동시 요청은 한 번만 점검, 1시간 보관', async () => {
   audits = 0;
-  const [a, b] = await Promise.all([call('POST', '/api/hospital/check', { body: { url: 'raon.example' } }), call('POST', '/api/hospital/check', { body: { url: 'https://www.raon.example/' } })]);
+  const [a, b] = await Promise.all([call('POST', '/api/hospital/check', { body: { url: 'raon.example' } }), call('POST', '/api/hospital/check', { body: { url: 'https://raon.example/' } })]);
   assert.equal(a.json.ok, true); assert.equal(b.json.ok, true);
   assert.equal(audits, 1, '합류');
   const r = a.json.result;
@@ -159,4 +164,44 @@ test('상담 신청 한도: 1분에 5건', async () => {
   const codes = [];
   for (let i = 0; i < 6; i++) codes.push((await call('POST', '/api/hospital/lead', { body: { hospital: '가', phone: '01000000000', consent: true }, xff: '203.0.113.77' })).status);
   assert.deepEqual(codes, [200, 200, 200, 200, 200, 429]);
+});
+
+test('R2: 같은 주소에 몰려도 한 사람당 한도는 그대로, 한 점검에 붙는 대기도 제한', async () => {
+  clock += 5 * 60 * 1000; H._state.ipLog.check.clear();
+  let release; const gate = new Promise((r) => { release = r; });
+  const keep = H._state.audit;
+  H._state.audit = async (u) => { await gate; return runAudit(u, { fetcher: fakeFetcher }); };
+  try {
+    const calls = Array.from({ length: 12 }, () => call('POST', '/api/hospital/check', { body: { url: 'join.example' }, xff: '203.0.113.200' }));
+    await new Promise((r) => setTimeout(r, 80));
+    release();
+    const codes = (await Promise.all(calls)).map((r) => r.status).sort();
+    assert.equal(codes.filter((c) => c === 200).length, 6);
+    assert.equal(codes.filter((c) => c === 429).length, 6);
+  } finally { H._state.audit = keep; }
+});
+
+test('R2: 전달 주소는 맨 뒤 값(우리 쪽 프록시가 붙인 값)만 믿는다', async () => {
+  clock += 5 * 60 * 1000; H._state.ipLog.check.clear();
+  const codes = [];
+  for (let i = 0; i < 8; i++) codes.push((await call('POST', '/api/hospital/check', { body: { url: 'xff' + i + '.example' }, xff: '10.9.9.' + i + ', 198.51.100.9' })).status);
+  assert.deepEqual(codes, [200, 200, 200, 200, 200, 200, 429, 429]);
+});
+
+test('R2: 끝에 점이 붙은 주소(geo.test.)도 병원 주소로 본다', async () => {
+  assert.equal((await call('POST', '/api/check', { host: 'geo.test.', body: { url: 'x' } })).status, 404);
+  assert.equal((await call('GET', '/', { host: 'GEO.test.:443' })).status, 200);
+});
+
+test('R2: 보관 기간이 지난 상담 신청과 오래된 결과 사본은 청소 때 지워진다', async () => {
+  H._state.ipLog.lead.clear();
+  await call('POST', '/api/hospital/lead', { body: { hospital: '보관시험의원', phone: '01000000000', consent: true }, xff: '203.0.113.90' });
+  assert.match(fs.readFileSync(H._files.LEADS, 'utf8'), /보관시험의원/);
+  const before = fs.readdirSync(H._files.REPORTS).length;
+  assert.ok(before >= 1);
+  clock += 366 * 24 * 3600 * 1000;
+  H.sweep();
+  assert.doesNotMatch(fs.readFileSync(H._files.LEADS, 'utf8'), /보관시험의원/);
+  assert.equal(fs.readdirSync(H._files.REPORTS).length, 0);
+  assert.equal(H._state.ipLog.lead.size, 0);
 });
