@@ -151,7 +151,8 @@ test('전화 상담 신청: 동의·연락처 필수, 관리자만 열람, 1년 
   const st = (await call('GET', '/api/hospital/stats?token=adm')).json;
   assert.equal(st.leads, 1);
   assert.deepEqual([st.recentLeads[0].hospital, st.recentLeads[0].phone, st.recentLeads[0].time, st.recentLeads[0].host], ['라온피부과', '01012345678', '오후 2시 이후', 'raon.example']);
-  assert.equal(typeof st.recentLeads[0].score, 'number');
+  assert.equal(st.recentLeads[0].mode, 'phone');
+  assert.ok(st.spend && st.spend.monthly === 300000, '관리 화면에 지출 합계');
   assert.ok(st.checks >= 1);
   // 플레이스 체크 상담 파일과 섞이지 않는다
   assert.equal(fs.existsSync(path.join(TMP, 'cache', 'leads.jsonl')), false);
@@ -204,4 +205,38 @@ test('R2: 보관 기간이 지난 상담 신청과 오래된 결과 사본은 �
   assert.doesNotMatch(fs.readFileSync(H._files.LEADS, 'utf8'), /보관시험의원/);
   assert.equal(fs.readdirSync(H._files.REPORTS).length, 0);
   assert.equal(H._state.ipLog.lead.size, 0);
+});
+
+test('챗GPT 실측: 결과·공유 링크·같은 지역 재사용, 상담 신청에 실측 결과가 붙는다', async () => {
+  let openai = 0, places = 0;
+  const ANS = '**새솔피부과의원** 그리고 **라온피부과의원**을 추천해요.';
+  H._state.env = { OPENAI_API_KEY: 'x', GOOGLE_PLACES_API_KEY: 'g' };
+  H._state.fetchApi = async (url) => {
+    if (url.includes('openai')) { openai++; return { ok: true, status: 200, json: async () => ({ usage: { input_tokens: 8000, output_tokens: 400 }, output: [{ type: 'web_search_call' }, { type: 'message', content: [{ type: 'output_text', text: ANS, annotations: [{ url: 'https://www.modoodoc.com/h/1', title: '모두닥' }] }] }] }) }; }
+    places++; if (!url.includes('searchText')) return { ok: true, status: 200, json: async () => ({ displayName: { text: 'raon clinic' } }) };
+    return { ok: true, status: 200, json: async () => ({ places: [{ id: 'r1', displayName: { text: '라온피부과의원' }, primaryType: 'doctor', primaryTypeDisplayName: { text: '의사' }, rating: 4.9, userRatingCount: 30 }] }) };
+  };
+  try {
+    const body = { name: '라온피부과의원', address: '서울 마포구 서교동', category: '피부과', regions: ['홍대', '서교동'] };
+    const r = (await call('POST', '/api/hospital/probe', { body, xff: '203.0.113.70' })).json;
+    assert.equal(r.ok, true);
+    assert.deepEqual([r.gpt.asked, r.gpt.hits, r.gpt.rows[0].rank, r.gpt.rivals[0].name], [5, 5, 2, '새솔피부과의원']);
+    assert.deepEqual([r.map.found, r.map.category, r.map.shownName, r.map.inName], [true, 'unverifiable', 'raon clinic', false]);
+    assert.equal(r.gpt.sources[0].kind, '모두닥');
+    assert.deepEqual([openai, places], [6, 3], '질문 5개+이름 질문 1개, 지도는 우리(찾기·영어 이름)+많이 나온 병원 1번');
+    assert.equal(r.rivalMap.found, false, '새솔피부과의원은 이 동네 지도 답에 없다');
+    assert.equal(r.gpt.compare.rival.name, '새솔피부과의원');
+    assert.ok(r.gpt.intro && r.gpt.intro.q === '홍대 라온피부과의원 어때?');
+    const snap = (await call('GET', '/api/hospital/report/' + r.token)).json;
+    assert.equal(snap.result.kind, 'probe');
+    const r2 = (await call('POST', '/api/hospital/probe', { body: { ...body, name: '새솔피부과의원' }, xff: '203.0.113.71' })).json;
+    assert.equal(r2.gpt.rows[0].rank, 1);
+    assert.equal(openai, 7, '공통 질문은 다시 부르지 않고 이름 질문만 새로');
+    assert.equal((await call('POST', '/api/hospital/probe', { body: { name: '라온', category: '카페' } })).json.reason, 'no_dept');
+    const lead = await call('POST', '/api/hospital/lead', { body: { hospital: '라온피부과의원', phone: '01099998888', consent: true, mode: 'visit', token: r.token } });
+    assert.equal(lead.json.ok, true);
+    const st = (await call('GET', '/api/hospital/stats?token=adm')).json;
+    assert.deepEqual([st.recentLeads[0].mode, st.recentLeads[0].gpt, st.recentLeads[0].map], ['visit', '5/5', 'unverifiable']);
+    assert.ok(st.spend.krw > 0);
+  } finally { H._state.env = null; H._state.fetchApi = null; }
 });

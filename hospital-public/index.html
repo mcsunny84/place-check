@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>병원 홈페이지 AI 검색 점검 | 이스트라이트랩스</title>
-<meta name="description" content="우리 병원 홈페이지를 챗GPT, 클로드, 제미나이, 퍼플렉시티가 읽어 갈 수 있는지 1분 안에 점검합니다. 막힌 곳과 고치면 오르는 점수를 알려 드립니다.">
-<meta property="og:title" content="병원 홈페이지 AI 검색 점검">
-<meta property="og:description" content="우리 병원 홈페이지, AI는 얼마나 읽고 있을까요. 4대 AI 기준으로 1분 안에 확인합니다.">
+<title>병원 AI 검색 점검 | 이스트라이트랩스</title>
+<meta name="description" content="챗GPT에 우리 지역 진료과 추천 질문을 실제로 물어보고, 우리 병원이 몇 번 나오는지와 대신 나오는 병원을 보여 드립니다.">
+<meta property="og:title" content="병원 AI 검색 점검">
+<meta property="og:description" content="환자가 챗GPT에 병원을 물으면, 우리 병원이 나올까요. 1분 안에 확인합니다.">
 <meta name="theme-color" content="#241C8E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <style>
@@ -203,77 +203,265 @@ footer b{color:var(--ink)}
 .cands small{flex-shrink:1;min-width:0;text-align:right;line-height:1.4}
 .cands button span{flex-shrink:0;max-width:62%}
 @media (prefers-reduced-motion:reduce){.note.wait i{animation:none}}
+/* ---------- v2: 챗GPT 실측 ---------- */
+.setup{background:#fff;color:var(--ink);border-radius:4px;margin-top:10px;padding:16px 18px 18px;display:grid;gap:12px}
+.sname{font-weight:700}
+.srow{display:grid;gap:10px}
+.srow label{display:grid;gap:4px;font-size:13px;font-weight:700;color:var(--sub);margin:0}
+.srow label em{font-style:normal;font-weight:500}
+.srow input{height:48px;border:2px solid var(--ink);border-radius:4px;padding:0 12px;font:inherit;font-size:16px;color:var(--ink);width:100%}
+.sq{font-size:13px;color:var(--sub);line-height:1.5}
+.setup .go{width:100%}
+.cond{font-size:13px;color:var(--sub);margin-top:12px;max-width:30em;line-height:1.55}
+.sub2{font-size:clamp(20px,5vw,26px);margin-top:44px}
+.qlist{margin-top:14px;display:grid;max-width:760px}
+.q{border-top:1px solid var(--rule);padding:14px 0}
+.q:last-child{border-bottom:1px solid var(--rule)}
+.qh{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.qh b{font-weight:700;font-size:16px}
+.pill2{flex-shrink:0;font-family:var(--display);font-weight:700;font-size:14px;padding:5px 10px 2px;border-radius:999px}
+.pill2.found{background:var(--indigo);color:#fff}.pill2.missing{background:var(--pink-bg);color:var(--pink)}.pill2.skipped{background:var(--mist);color:var(--sub)}
+.inst{font-size:14px;color:var(--sub);margin-top:4px}
+.q details summary{font-size:13px;color:var(--indigo);font-weight:700;cursor:pointer;margin-top:6px;list-style:none;text-decoration:underline;text-underline-offset:3px}
+.q details summary::-webkit-details-marker{display:none}
+.ans{margin-top:10px;background:var(--mist);border-radius:4px;padding:12px 14px;font-size:14px;line-height:1.65;white-space:pre-wrap}
+.srcs{margin-top:8px;padding:0;display:grid;gap:4px}
+.srcs li{list-style:none;font-size:13px;color:var(--sub);display:flex;gap:8px;min-width:0}
+.srcs li em{font-style:normal;font-weight:700;color:var(--ink);flex-shrink:0}
+.srcs li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rivals{margin-top:24px;display:grid;gap:12px;max-width:640px}
+.rv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:baseline}
+.rv b{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv span{font-family:var(--display);font-weight:700;font-size:15px}
+.rv i{grid-column:1 / -1;height:12px;border-radius:999px;background:var(--mist);position:relative;overflow:hidden;display:block}
+.rv i::after{content:"";position:absolute;inset:0 auto 0 0;width:var(--w);background:var(--ink);border-radius:999px}
+.rv.me b,.rv.me span{color:var(--pink)}.rv.me i::after{background:var(--pink)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px;max-width:720px}
+.chip{border:2px solid var(--ink);border-radius:999px;padding:6px 14px 4px;font-weight:700;font-size:14px}
+.chip b{font-family:var(--display);margin-left:6px}
+.chip.us{background:var(--indigo);color:#fff;border-color:var(--indigo)}
+.mapcard{margin-top:26px;background:#fff;border-radius:4px;padding:20px 18px;max-width:640px;display:grid;gap:4px}
+.mapcard h3{font-size:19px;font-weight:700;line-height:1.4}
+.mapcard .meta{font-size:14px;color:var(--sub)}
+.mchecks{margin-top:12px;padding:0;display:grid}
+.mchecks li{list-style:none;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:12px 0;border-top:1px solid var(--rule);font-size:15px}
+.mchecks li strong{font-weight:700;flex-shrink:0}
+.mchecks li small{grid-column:2;color:var(--sub);font-size:13px;line-height:1.5}
+.mchecks .ok{color:var(--ok)}.mchecks .bad{color:var(--pink)}.mchecks .unk2{color:var(--sub)}
+.mapcard a{color:var(--indigo);font-weight:700;font-size:14px;margin-top:8px}
+.stk.n{font-size:26px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modes label{margin:0;display:block;cursor:pointer}
+.modes input{position:absolute;opacity:0;width:1px;height:1px}
+.modes span{display:block;text-align:center;border:2px solid var(--ink);border-radius:4px;padding:13px 6px 11px;font-weight:700;font-size:15px;color:var(--ink)}
+.modes input:checked+span{background:var(--ink);color:#fff}
+.modes input:focus-visible+span{outline:3px solid var(--yellow);outline-offset:2px}
+.dm .callform .ml{font-size:14px;font-weight:700;margin:0 0 2px;color:var(--ink)}
+/* ---------- v3: 결과 보강(우리 병원 소개·나란히·상담에서) ---------- */
+/* A. 우리 병원 소개 */
+.intro{margin-top:24px;max-width:720px;display:grid;gap:14px}
+.qbub{justify-self:end;background:var(--ink);color:#fff;border-radius:18px 18px 4px 18px;padding:10px 16px;font-size:15px;font-weight:600;max-width:90%}
+.abub{background:var(--mist);border-radius:4px 18px 18px 18px;padding:16px 18px;font-size:15px;line-height:1.75}
+.abub mark{background:var(--pink-bg);color:var(--pink);font-weight:700;padding:0 3px;border-radius:2px}
+#introtext{white-space:pre-line}
+#ghostgpt{color:var(--pink)}
+.abub .src{display:block;margin-top:10px;font-size:13px;color:var(--sub)}
+.gaps{margin-top:6px;padding:0;display:grid;max-width:720px}
+.gaps li{list-style:none;display:grid;grid-template-columns:96px 1fr;gap:4px 14px;padding:13px 0;border-top:1px solid var(--rule);font-size:15px;align-items:baseline}
+.gaps li:last-child{border-bottom:1px solid var(--rule)}
+.gaps li strong{font-weight:700}
+.gaps li small{grid-column:2;color:var(--sub);font-size:13px;line-height:1.5}
+.gaps .miss{color:var(--pink)}.gaps .okk{color:var(--ok)}.gaps .soso{color:var(--indigo)}
+.ask2{margin-top:18px;border:2px solid var(--ink);border-radius:4px;padding:14px 16px;font-size:15px;font-weight:700;max-width:720px;line-height:1.55}
+.ask2 span{display:block;font-weight:500;color:var(--sub);font-size:14px;margin-top:2px}
+/* B. 1등 병원과 나란히 */
+.vs{margin-top:26px;max-width:760px;border-top:2px solid var(--ink)}
+.vsh,.vsr{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:baseline}
+.vsh{padding:14px 0 12px;border-bottom:2px solid var(--ink)}
+.vsh b{font-weight:700;font-size:14px;line-height:1.35}
+.vsh b small{display:block;font-weight:500;color:var(--sub);font-size:12px}
+.vsh .me{color:var(--pink)}
+.vsr{padding:14px 0;border-bottom:1px solid var(--rule)}
+.vsr>span:first-child{font-size:14px;color:var(--sub);font-weight:600}
+.vsr em{font-style:normal;font-family:var(--display);font-weight:700;font-size:20px;line-height:1.2}
+.vsr em small{font-family:var(--body);font-size:13px;font-weight:500;color:var(--sub);display:block;margin-top:2px;line-height:1.4}
+.vsr .lo{color:var(--pink)}
+.vsr .tx{font-family:var(--body);font-size:14px;font-weight:700}
+.twist{margin-top:22px;background:var(--pink);color:#fff;border-radius:4px;padding:16px 18px;max-width:760px;font-weight:700;font-size:17px;line-height:1.5}
+.twist span{display:block;font-weight:500;font-size:14px;margin-top:4px;opacity:.92}
+.diff{margin-top:20px;max-width:760px;counter-reset:d;padding:0;display:grid}
+.diff li{list-style:none;display:grid;grid-template-columns:44px 1fr;gap:12px;padding:14px 0;border-bottom:1px solid var(--rule)}
+.diff li::before{counter-increment:d;content:counter(d);width:40px;height:40px;border-radius:50%;background:var(--yellow);display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:18px;padding-top:3px}
+.diff li b{display:block;font-size:16px;line-height:1.45}
+.diff li p{color:var(--sub);font-size:14px;margin-top:2px}
+.diff li.locked p{filter:blur(4px);user-select:none}
+.diff li.locked p+i{display:block;font-style:normal;font-size:13px;color:var(--indigo);font-weight:700;margin-top:4px}
+/* C. 상담에서 열리는 칸 */
+.locks{margin-top:26px;display:grid;gap:12px;max-width:760px}
+.lk{background:#fff;border:2px solid var(--ink);border-radius:4px;padding:18px 18px 16px;display:grid;gap:6px;position:relative}
+.lk h3{font-size:17px;font-weight:700;line-height:1.4;padding-right:44px}
+.lk p{font-size:14px;color:var(--sub);line-height:1.55}
+.lk .ic{position:absolute;right:16px;top:16px;width:30px;height:30px;border-radius:50%;background:var(--ink);display:grid;place-items:center}
+.lk .ic::before{content:"";width:10px;height:8px;border:2.5px solid #fff;border-bottom:0;border-radius:6px 6px 0 0;position:relative;top:-5px}
+.lk .ic::after{content:"";position:absolute;width:14px;height:10px;background:#fff;border-radius:2px;top:13px}
+.ghost{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.ghost div{background:var(--mist);border-radius:4px;padding:8px 6px;text-align:center;font-size:12px;color:var(--sub);font-weight:700}
+.ghost div i{display:block;font-style:normal;font-family:var(--display);font-size:18px;color:#B9B5DD;margin-top:2px}
+.lk .fact{background:var(--pink-bg);color:var(--ink);border-radius:4px;padding:9px 12px;font-size:13px;line-height:1.5;margin-top:4px}
+.lk .fact b{color:var(--pink)}
+.lockcta{margin-top:22px;max-width:760px}
+.lockcta .go{width:100%;max-width:420px;display:grid;place-items:center;text-decoration:none}
+@media (min-width:760px){.locks{grid-template-columns:1fr 1fr}}
+@media (min-width:760px){.srow{grid-template-columns:1fr 1fr 1fr}}
+
 </style>
 </head>
 <body>
 
 <header class="hero">
   <div class="wrap">
-    <div class="top"><span class="mark">eastlight labs</span><span>병원 홈페이지 AI 검색 점검</span></div>
-    <h1>우리 병원 홈페이지,<br><span class="box">AI는</span> 얼마나<br>읽고 있을까요</h1>
-    <p class="lede">환자는 이제 병원을 AI에게 물어봅니다. AI가 홈페이지를 읽지 못하면 답변에 넣을 내용이 없습니다. 1분이면 확인됩니다.</p>
+    <div class="top"><span class="mark">eastlight labs</span><span>병원 AI 검색 점검</span></div>
+    <h1>환자가 AI에게<br>병원을 물으면,<br><span class="box">우리 병원</span>이 나올까요</h1>
+    <p class="lede">챗GPT에 "우리 동네 진료과 추천해줘" 같은 질문 5개를 실제로 물어봐요. 우리 병원이 몇 번 나오는지, 대신 어느 병원이 나오는지 1분 안에 보여 드려요.</p>
     <form class="ask" id="ask" novalidate>
-      <label for="q">병원 이름이나 홈페이지 주소</label>
+      <label for="q">병원 이름</label>
       <div class="field">
-        <input id="q" type="text" placeholder="예: ○○피부과 또는 www.병원주소.com" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200">
-        <button class="go" type="submit" id="go">점검하기</button>
+        <input id="q" type="text" placeholder="예: ○○피부과의원" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="200">
+        <button class="go" type="submit" id="go">찾기</button>
       </div>
       <div class="cands" id="cands" hidden></div>
-      <div class="note wait" id="wait" hidden><i></i><span id="waittext">홈페이지를 여는 중이에요</span></div>
+      <div class="setup" id="setup" hidden>
+        <p class="sname" id="sname"></p>
+        <div class="srow">
+          <label><span class="lt">질문할 지역</span><input id="r1" type="text" maxlength="12"></label>
+          <label><span class="lt">두 번째 지역 <em>선택</em></span><input id="r2" type="text" maxlength="12" placeholder="예: ○○역"></label>
+          <label><span class="lt">진료과</span><input id="dp" type="text" maxlength="12"></label>
+        </div>
+        <p class="sq" id="sq"></p>
+        <button class="go" type="button" id="run">챗GPT에 물어보기</button>
+      </div>
+      <div class="note wait" id="wait" hidden><i></i><span id="waittext">병원을 찾는 중이에요</span></div>
       <div class="note" id="note" role="status" aria-live="polite" hidden></div>
     </form>
-    <p class="four">점검 기준 <b>챗GPT · 클로드 · 제미나이 · 퍼플렉시티</b></p>
+    <p class="four">병원 이름은 질문에 넣지 않아요. <b>환자가 실제로 묻는 말</b> 그대로 물어봐요.</p>
   </div>
 </header>
 
-<div class="sample" id="sample" hidden>아래는 지어낸 병원으로 만든 예시 결과입니다. 위에 병원 이름이나 주소를 넣으면 실제 결과로 바뀌어요.</div>
+<div class="sample" id="sample" hidden>아래는 지어낸 병원으로 만든 예시 결과예요. 위에 병원 이름을 넣으면 실제 결과로 바뀌어요.</div>
 
 <main id="result" hidden>
 <section>
   <div class="wrap">
-    <div id="alerts"></div>
     <p class="who whobar"><span id="who"></span><button class="again" type="button" id="again">다른 병원 점검하기</button></p>
     <div class="score" style="margin-top:22px">
-      <div class="num"><span id="num">0</span><small>/ 100점</small></div>
+      <div class="num"><span id="num">0</span><small id="den">/ 5</small></div>
       <div>
-        <span class="grade" id="grade"></span>
+        <span class="grade" id="grade">챗GPT 추천</span>
         <p class="verdict" id="verdict"></p>
-        <div class="avgwrap"><div class="avg" id="avg"></div></div>
+        <p class="cond" id="cond"></p>
       </div>
     </div>
-    <div class="doors" id="doors"></div>
-    <p class="fine" id="doorsfine"></p>
   </div>
 </section>
 
-<div class="versus">
-  <div class="wrap vgrid">
-    <div class="vhead">
-      <h2 id="vtitle"></h2>
-      <p class="count">첫 화면에서 AI가 읽은 글자 <b id="chars">0</b>자</p>
+<section id="introsec" hidden>
+  <div class="wrap">
+    <h2>챗GPT는 우리 병원을<br><span class="box">이렇게 소개해요</span></h2>
+    <p class="say">이번에는 병원 이름을 넣어서 물어봤어요. 환자가 "거기 어때?" 하고 확인할 때 보는 답이에요.</p>
+    <div class="intro">
+      <div class="qbub" id="introq"></div>
+      <div class="abub"><div id="introtext"></div><span class="src" id="introsrc"></span></div>
     </div>
-    <div class="pair">
-      <div class="phone"><div class="site" id="site"></div><span class="tag" id="sitetag"></span><span class="pill">사람이 보는 화면</span></div>
-      <div class="phone ai"><div class="read" id="read"></div><span class="pill">AI가 읽는 화면</span></div>
-    </div>
-    <div class="vrest">
-      <p class="say" id="vsay"></p>
-      <ul class="cant" id="cant"></ul>
-    </div>
+    <ul class="gaps" id="gaps"></ul>
+    <p class="ask2">이 소개에 틀리거나 빠진 내용이 있나요?<span>AI가 병원을 소개하는 글은 고치는 순서가 따로 있어요. 상담에서 알려 드려요.</span></p>
   </div>
-</div>
+</section>
+
+<section id="vssec" hidden>
+  <div class="wrap">
+    <h2 id="vstitle"></h2>
+    <p class="say" id="vssay"></p>
+    <div class="vs" id="vs"></div>
+    <p class="twist" id="twist" hidden></p>
+    <h2 class="sub2" id="diffh">차이</h2>
+    <ol class="diff" id="diff"></ol>
+    <p class="fine">"그 병원 글"은 챗GPT 답에 붙은 출처 가운데 제목이나 주소에 그 병원 이름이 들어간 것만 셌어요(우리 병원은 홈페이지 포함).</p>
+  </div>
+</section>
 
 <section>
   <div class="wrap">
-    <h2 id="ltitle">이걸 고치면</h2>
-    <p class="jump" id="jump"></p>
-    <p class="say" id="lsay"></p>
+    <h2 class="sub2" style="margin-top:0">질문별로 보면</h2>
+    <div class="qlist" id="qlist"></div>
+  </div>
+</section>
+
+<section id="rivalsec">
+  <div class="wrap">
+    <h2>같은 질문에<br><span class="box">자주 나온</span> 병원</h2>
+    <p class="say" id="rivalsay"></p>
+    <div class="rivals" id="rivals"></div>
+  </div>
+</section>
+
+<section id="srcsec">
+  <div class="wrap">
+    <h2>챗GPT가 <span class="box">근거로 댄</span> 곳</h2>
+    <p class="say" id="srcsay"></p>
+    <div class="chips" id="chips"></div>
+    <p class="fine">우리 병원이 이 사이트들에 올라 있는지는 따로 확인하지 않았어요. 챗GPT 답에 붙은 출처만 센 숫자예요.</p>
+  </div>
+</section>
+
+<div class="versus" id="mapsec">
+  <div class="wrap">
+    <h2>구글 지도에는<br>어떻게 올라 있나요</h2>
+    <p class="say">챗GPT 앱 화면은 병원을 고를 때 구글 지도 장소 정보를 함께 써요. 저희 실측에서는 "○○ 피부과 추천" 같은 질문에, 지도 분류나 이름에 진료과가 들어 있지 않은 병원이 후기가 많아도 빠지는 경우가 있었어요.</p>
+    <div class="mapcard" id="mapcard"></div>
+  </div>
+</div>
+
+<section id="homesec" hidden>
+  <div class="wrap">
+    <h2>홈페이지는<br><span class="box">AI가 읽을 수</span> 있나요</h2>
+    <p class="say" id="homesay"></p>
+    <div class="doors" id="doors"></div>
+    <p class="fine" id="doorsfine"></p>
+    <h2 class="sub2">고칠 것</h2>
     <div class="steps" id="steps"></div>
     <details class="more" style="margin-top:18px">
-      <summary>항목별 점수 전부 보기</summary>
+      <summary>항목별로 전부 보기</summary>
       <div class="table" id="table"></div>
-      <p class="fine">확인된 것에만 점수를 드려요. 찾지 못한 항목은 0점이에요. 홈페이지 첫 화면과 거기서 연결된 의료진·질문·안내 페이지까지만 읽어요.</p>
+      <p class="fine">홈페이지 첫 화면과 거기서 연결된 의료진·질문·안내 페이지까지만 읽어요. 이 항목들이 다 갖춰져도 AI 추천이 보장되지는 않아요.</p>
     </details>
+  </div>
+</section>
+
+<section id="locksec">
+  <div class="wrap">
+    <h2>여기까지가 챗GPT예요.<br><span class="box">상담에서</span> 더 재 드려요</h2>
+    <p class="say">아래는 무료 점검에서 재지 않은 것들이에요. 상담을 신청하시면 같은 질문으로 직접 재서 보여 드려요.</p>
+    <div class="locks">
+      <div class="lk"><span class="ic" aria-hidden="true"></span>
+        <h3>다른 AI 3곳에서는?</h3>
+        <p>같은 질문 5개를 제미나이·클로드·퍼플렉시티에도 물어봐요.</p>
+        <div class="ghost"><div>챗GPT<i id="ghostgpt"></i></div><div>제미나이<i>?</i></div><div>클로드<i>?</i></div><div>퍼플렉시티<i>?</i></div></div>
+      </div>
+      <div class="lk"><span class="ic" aria-hidden="true"></span>
+        <h3>외국인 환자가 영어·중국어·일본어로 물으면?</h3>
+        <p>같은 질문을 세 나라 말로 바꿔 물어봐요.</p>
+        <p class="fact">저희 실측(강남 피부과, 2026년 11월)에서는 <b>언어를 바꾸면 추천 명단이 거의 다 바뀌었어요.</b> 한국어 명단과 겹친 곳은 0~1곳이었어요.</p>
+      </div>
+      <div class="lk"><span class="ic" aria-hidden="true"></span>
+        <h3 id="lk3">많이 나온 병원이 인용된 글 전체 목록</h3>
+        <p>어떤 질문에서 어떤 글이 근거로 쓰였는지, 우리 병원에는 무엇이 없는지 한 장으로 정리해 드려요.</p>
+      </div>
+      <div class="lk"><span class="ic" aria-hidden="true"></span>
+        <h3>우리 병원 고칠 순서</h3>
+        <p>홈페이지·구글 지도·네이버까지 무엇부터 손대야 추천에 가까워지는지, 순서대로 알려 드려요.</p>
+      </div>
+    </div>
+    <div class="lockcta"><a class="go" href="#call">무료 상담으로 전부 보기</a></div>
   </div>
 </section>
 </main>
@@ -281,24 +469,29 @@ footer b{color:var(--ink)}
 <div class="dm" id="call" hidden>
   <div class="wrap dmgrid">
     <div>
-      <h2 id="calltitle">직접 고치기 어려우시면<br><span class="box">전화로</span> 설명드릴게요</h2>
+      <h2 id="calltitle">왜 빠졌는지,<br>어떻게 하면 나오는지<br><span class="box">무료로</span> 설명드려요</h2>
       <p id="callsay"></p>
     </div>
     <form class="callform" id="callform" novalidate>
+      <p class="ml">상담 방법</p>
+      <div class="modes" role="radiogroup" aria-label="상담 방법">
+        <label><input type="radio" name="mode" value="phone" checked> <span>전화 상담</span></label>
+        <label><input type="radio" name="mode" value="visit"> <span>병원 방문 상담</span></label>
+      </div>
       <label for="hn">병원 이름</label>
       <input id="hn" type="text" autocomplete="organization" maxlength="40">
       <p class="err" id="hnerr" hidden>병원 이름을 적어 주세요.</p>
       <label for="ph">연락처</label>
       <input id="ph" type="tel" inputmode="tel" placeholder="010-0000-0000" autocomplete="tel" maxlength="20">
-      <p class="err" id="pherr" hidden>연락처를 적어 주세요. 이 번호로 전화드려요.</p>
-      <label for="tm">통화 편한 시간 <span>선택</span></label>
+      <p class="err" id="pherr" hidden>연락처를 적어 주세요. 이 번호로 연락드려요.</p>
+      <label for="tm" id="tmlabel">통화 편한 시간 <span>선택</span></label>
       <input id="tm" type="text" placeholder="예: 평일 점심시간, 오후 6시 이후" maxlength="40">
       <label class="agree"><input type="checkbox" id="ag"> <span>상담을 위한 개인정보 수집에 동의해요. 병원 이름·연락처를 1년 동안 보관해요. <a id="privlink" target="_blank" rel="noopener">자세히</a></span></label>
       <p class="err" id="agerr" hidden>동의에 체크해 주세요.</p>
       <p class="err" id="senderr" hidden></p>
-      <button class="go" type="submit" id="callgo">전화 상담 신청하기</button>
-      <p class="done" id="done" hidden>신청됐어요. 점검 결과를 보고 하루 안에 전화드릴게요.</p>
-      <button class="kakao" type="button" id="kakao">전화가 부담되시면 카카오톡으로 물어보기</button>
+      <button class="go" type="submit" id="callgo">무료 상담 신청하기</button>
+      <p class="done" id="done" hidden></p>
+      <button class="kakao" type="button" id="kakao">먼저 카카오톡으로 물어보기</button>
       <small id="kakaosay">누르면 카카오톡 1:1 오픈채팅이 열려요.</small>
     </form>
   </div>
@@ -307,14 +500,14 @@ footer b{color:var(--ink)}
 <footer>
   <div class="wrap">
     <p><b>(주)이스트라이트랩스</b></p>
-    <p>이 점수는 AI가 홈페이지를 읽어 갈 준비가 됐는지를 본 점수예요. 점수가 높다고 AI가 병원을 추천한다는 뜻은 아니에요. 점검만 하실 때는 홈페이지 주소와 결과 요약만 보관해요. 병원 이름과 연락처는 전화 상담을 신청하신 경우에만 1년 동안 보관해요. <a id="privlink2">개인정보 처리 안내</a></p>
+    <p>추천 결과는 챗GPT 검색 기능(OpenAI API)에 질문마다 한 번씩 물어본 결과예요. 챗GPT 앱 화면, 로그인 여부, 다른 AI에서는 다르게 나올 수 있고, 같은 지역·진료과 질문은 7일 동안 결과를 함께 써요. 점검만 하실 때는 병원 이름과 결과 요약만 보관해요. 연락처는 상담을 신청하신 경우에만 1년 동안 보관해요. <a id="privlink2">개인정보 처리 안내</a></p>
   </div>
 </footer>
 
 <div class="bar" id="bar" hidden>
   <div class="wrap">
     <p><b id="barnum"></b><span id="barsay"></span></p>
-    <a class="go barlink" href="#call">전화 상담 신청</a>
+    <a class="go barlink" href="#call">무료 상담 신청</a>
   </div>
 </div>
 
